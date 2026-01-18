@@ -1,0 +1,15 @@
+name = "hoverfly"
+version = "0.1.0"
+defaultTargets = ["hoverfly"]
+
+[[lean_lib]]
+name = "Hoverfly"
+
+[[lean_exe]]
+name = "hoverfly"
+root = "Main"
+
+[[require]]
+name = "ProofWidgets4"
+git = "https://github.com/leanprover-community/ProofWidgets4"
+rev = "v0.0.83"
