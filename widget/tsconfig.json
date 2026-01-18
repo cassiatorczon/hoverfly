@@ -1,7 +1,29 @@
+// from https://github.com/leanprover-community/ProofWidgets4/blob/main/widget/rollup.config.js
 {
-  "files": [],
-  "references": [
-    { "path": "./tsconfig.app.json" },
-    { "path": "./tsconfig.node.json" }
+  "compilerOptions": {
+    /* Language and environment */
+    "target": "esnext",
+    "jsx": "react-jsx",
+    /* Modules */
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    /* Emit code */
+    "sourceMap": false,
+    "outDir": "./dist/",
+    /* Emit declarations */
+    "declaration": true,
+    "allowSyntheticDefaultImports": true,
+    /* Interop constraints */
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    /* Typechecking */
+    "strict": true,
+    "isolatedModules": true,
+    /* Completeness */
+    "skipLibCheck": true
+  },
+  "include": [
+    "./src/*.ts",
+    "./src/*.tsx"
   ]
 }

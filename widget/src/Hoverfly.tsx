@@ -1,7 +1,8 @@
 import { Fragment, useState } from 'react'
-import './App.css'
+import { useRpcSession, useAsync, mapRpcError } from '@leanprover/infoview';
+// import './App.css'
 
-type Status = "selected" | "semiselected" | "unselected" // | "hidden"
+type Status = "selected" | "semiselected" | "unselected" | "hidden"
 
 type Tactic = { id: string, name: string, children: Goal[], status: Status }
 
@@ -41,24 +42,16 @@ function HoverflyTree({ goal }: { goal: Goal }) {
   )
 }
 
-function App() {
+function Hoverfly() {
+  const rs = useRpcSession()
 
-  return (
-    <>
-      <HoverflyTree goal={{
-        id: "g0",
-        name: "P /\\ Q", completed: false, children: [
-          {
-            id: "t0",
-            name: "split", children: [
-              { id: "g1", name: "P", completed: false, children: [], status: "unselected" },
-              { id: "g2", name: "Q", completed: false, children: [], status: "unselected" },
-            ], status: "selected"
-          }
-        ], status: "semiselected"
-      }} />
-    </>
-  )
+  const st = useAsync(() =>
+    rs.call('getInitialState', ""), [rs])
+
+  return st.state === 'resolved' ? <HoverflyTree goal={st.value as Goal} />
+    : st.state === 'rejected' ?
+      <p>{mapRpcError(st.error).message}</p>
+      : <p>Loading...</p>
 }
 
-export default App
+export default Hoverfly
