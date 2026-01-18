@@ -12,6 +12,9 @@ open Lean ProofWidgets
 
 def ID := String
 
+instance : ToJson ID := inferInstanceAs (ToJson String)
+instance : FromJson ID := inferInstanceAs (FromJson String)
+
 mutual
 structure Goal where
   id : ID
@@ -19,17 +22,23 @@ structure Goal where
   -- status : Status
   children : List Tactic
   completed : Bool
-deriving Server.RpcEncodable
+  deriving ToJson, FromJson
 
 structure Tactic where
   id : ID
   name : String
   -- status : Status
   children : List Goal
-deriving Server.RpcEncodable
-
+  deriving ToJson, FromJson
 end
 
+instance : Server.RpcEncodable Goal where
+  rpcEncode goal := pure (toJson goal)
+  rpcDecode json := fromJson? json |>.mapError (·)
+
+instance : Server.RpcEncodable Tactic where
+  rpcEncode tactic := pure (toJson tactic)
+  rpcDecode json := fromJson? json |>.mapError (·)
 
 end ProofTree
 
