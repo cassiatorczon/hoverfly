@@ -23,7 +23,7 @@ function renderTactic(tactic: Tactic, onClick: (id: string) => void): React.Reac
     </Fragment>)
 }
 
-function handleClick(goal: Goal, id: string): Goal {
+function handleClick(goal: Goal, _: string): Goal {
   return goal
 }
 
