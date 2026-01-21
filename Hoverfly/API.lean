@@ -1,23 +1,26 @@
 import ProofWidgets
-namespace Step
-
-namespace ProofTree
-
 -- inductive Status : Type where
 --   | selected -- status for current single node selected
 --   | semiselected  -- status for all ancestors of selected node
 --   | unselected -- status for all other visible nodes
 --   -- | hidden -- status for hidden children
+
+-- TODO namespaces
 open Lean ProofWidgets
 
-def ID := String
+-- TODO should these be the same
+def GoalId := String
+def TacticId := String
 
-instance : ToJson ID := inferInstanceAs (ToJson String)
-instance : FromJson ID := inferInstanceAs (FromJson String)
+instance : ToJson GoalId := inferInstanceAs (ToJson String)
+instance : FromJson GoalId := inferInstanceAs (FromJson String)
+
+instance : ToJson TacticId := inferInstanceAs (ToJson String)
+instance : FromJson TacticId := inferInstanceAs (FromJson String)
 
 mutual
 structure Goal where
-  id : ID
+  id : GoalId
   name : String
   -- status : Status
   children : List Tactic
@@ -25,7 +28,7 @@ structure Goal where
   deriving ToJson, FromJson
 
 structure Tactic where
-  id : ID
+  id : TacticId
   name : String
   -- status : Status
   children : List Goal
@@ -40,27 +43,45 @@ instance : Server.RpcEncodable Tactic where
   rpcEncode tactic := pure (toJson tactic)
   rpcDecode json := fromJson? json |>.mapError (·)
 
-end ProofTree
+open Lean ProofWidgets Server
 
-namespace API
+-- TODO arg
+@[server_rpc_method]
+def getInitialState (_ : String) : RequestM (RequestTask Goal) :=
+  -- TODO
+  pure $ RequestTask.pure
+    {
+      id:= "g0",
+      name:= "P /\\ Q", completed:= false, children:= [
+        {
+          id:= "t0",
+          name:= "split", children:= [
+            { id:= "g1", name:= "P", completed:= false, children:= []},
+            { id:= "g2", name:= "Q", completed:= false, children:= []},
+          ]
+        }
+      ]
+    }
 
-/-
-List of operations:
+@[server_rpc_method]
+def chooseTactic (_ : TacticId) : RequestM (RequestTask Goal) :=
+  -- TODO
+  pure $ RequestTask.pure
+  {
+    id:= "g0",
+    name:= "P /\\ Q", completed:= false, children:= [
+      {
+        id:= "t0",
+        name:= "split", children:= [
+          { id:= "g1", name:= "P", completed:= false, children:= []},
+          { id:= "g2", name:= "Q", completed:= false, children:= []},
+        ]
+      }
+    ]
+  }
 
-Change node selection status (selected, unselected, semiselected, hidden?)
-Mark goal node and applicable ancestors as completed
+@[widget_module]
+def checkWidget : Widget.Module where
+  javascript := include_str ".."/".lake"/"build"/"js"/"Hoverfly.js"
 
-Show applicable tactics for a goal
-Show subgoals for a tactic
-Hide and cache subtree rooted at goal
-Hide and cache subtree rooted at tactic
-Restore subtree rooted at goal
-Restore subtree rooted at tactic
-Hide unexplored neighboring tactics
-
--/
-
-
-end API
-
-end Step
+#widget checkWidget
