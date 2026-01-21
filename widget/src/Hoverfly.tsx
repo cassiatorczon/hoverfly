@@ -10,28 +10,6 @@ type Goal = { id: string, name: string, completed: boolean, children: Tactic[], 
 
 type Node = Tactic | Goal
 
-// function updateNode<N extends Node>(
-//   root: N,
-//   updateTactic?: (t: Tactic) => Tactic,
-//   updateGoal?: (g: Goal) => Goal,
-//   breakAfter?: (n: N) => boolean):
-//   N {
-//   const newRoot : N =
-//     (updateGoal && root.kind === "goal")
-//       ? updateGoal(root)
-//       : ((updateTactic && root.kind === "tactic")
-//         ? updateTactic(root)
-//         : root)
-//   if (breakAfter && breakAfter(root)) {
-//     return newRoot
-//   }
-
-//   return {
-//     ...newRoot, children: newRoot.children.map(g =>
-//       updateRootedAtGoal(g, updateTactic, updateGoal, breakAfterTactic, breakAfterGoal))
-//   }
-// }
-
 function updateRootedAtTactic(
   root: Tactic,
   updateTactic: (t: Tactic) => Tactic,
