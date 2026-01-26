@@ -2,116 +2,116 @@ import { Fragment, useState } from 'react'
 import { useRpcSession, useAsync, mapRpcError } from '@leanprover/infoview';
 // import './App.css'
 
+
+type Kind = "tactic" | "goal"
+
 type Status = "selected" | "semiselected" | "unselected"
 
-type Tactic = { id: string, name: string, children: Goal[], status: Status, visible: boolean }
+type Node = {
+  kind: Kind, // tactic or goal
+  id: string, // should be unique among all nodes
+  name: string, // Lean-recognizable description
+  final: boolean, // whether a goal is completed/a tactic is in the final script
+  children: Node[], // applicable tactics for a goal, subgoals for a tactic
+  status: Status, // display information
+  visible: boolean // visibility in display
+}
 
-type Goal = { id: string, name: string, completed: boolean, children: Tactic[], status: Status, visible: boolean }
+function updateNode(
+  root: Node,
+  update: (n: Node) => Node,
+  breakAfterNode: ((t: Node) => boolean)):
+  Node {
+  const newRoot = update(root);
 
-type Node = Tactic | Goal
-
-function updateRootedAtTactic(
-  root: Tactic,
-  updateTactic: (t: Tactic) => Tactic,
-  updateGoal: (g: Goal) => Goal,
-  breakAfterTactic: undefined | ((t: Tactic) => boolean),
-  breakAfterGoal: undefined | ((g: Goal) => boolean)):
-  Tactic {
-  const newRoot = updateTactic(root);
-  if (breakAfterTactic && breakAfterTactic(root)) {
+  if (breakAfterNode(root)) {
     return newRoot
   }
 
   return {
     ...newRoot, children: newRoot.children.map(g =>
-      updateRootedAtGoal(g, updateTactic, updateGoal, breakAfterTactic, breakAfterGoal))
+      updateNode(g, update, breakAfterNode))
   }
 }
 
-function updateRootedAtGoal(
-  root: Goal,
-  updateTactic: (t: Tactic) => Tactic,
-  updateGoal: (g: Goal) => Goal,
-  breakAfterTactic: undefined | ((t: Tactic) => boolean),
-  breakAfterGoal: undefined | ((g: Goal) => boolean)):
-  Goal {
-  const newRoot = updateGoal(root);
-  if (breakAfterGoal && breakAfterGoal(root)) {
-    return newRoot
+
+function renderNode(n: Node, onClick: (id: string) => void): React.ReactNode {
+  if (!n.visible) {
+    return
   }
 
-  return {
-    ...newRoot, children: newRoot.children.map(t =>
-      updateRootedAtTactic(t, updateTactic, updateGoal, breakAfterTactic, breakAfterGoal))
-  }
-}
-
-function renderGoal(goal: Goal, onClick: (id: string) => void): React.ReactNode {
   return (
-    <Fragment key={goal.id}>
-      <li onClick={() => onClick(goal.id)}>{goal.name} [{goal.status}]</li>
-      <ul> {goal.children.map((child: Tactic) => renderTactic(child, onClick))}</ul >
+    <Fragment key={n.id}>
+      <li onClick={() => onClick(n.id)}>{n.name} [{n.status}]</li>
+      <ul> {n.children.map((child: Node) => renderNode(child, onClick))}</ul >
     </Fragment>)
 }
 
-function renderTactic(tactic: Tactic, onClick: (id: string) => void): React.ReactNode {
-  return (
-    <Fragment key={tactic.id}>
-      <li onClick={() => onClick(tactic.id)}>{tactic.name} [{tactic.status}]</li>
-      <ul>{tactic.children.map((child: Goal) => renderGoal(child, onClick))}</ul>
-    </Fragment>)
+function changeNodeVisibility(n: Node, visible: boolean): Node {
+  return { ...n, visible: true }
 }
 
-function changeStatus(goal: Goal, p: (n: Node) => boolean, newStatus: Status): Goal {
-  const updateTactic = (t: Tactic) => p(t) ? { ...t, status: newStatus } : t
-  const updateGoal = (g: Goal) => p(g) ? { ...g, status: newStatus } : g
-  const breakAfter = (n: Node) => p(n)
-  return updateRootedAtGoal(goal, updateTactic, updateGoal, breakAfter, breakAfter)
+function changeStatusAtSelected(root: Node, newStatus: Status): Node {
+  const update = (n: Node) => n.status == 'selected'
+    ? { ...n, status: newStatus } : n
+  const breakAfter = (n: Node) => n.status === 'selected'
+  return updateNode(root, update, breakAfter)
 }
 
-function handleTacticClick(goal: Goal, id: string): Goal {
+function changeStatusAtId(root: Node, id: string, newStatus: Status): Node {
+  const update = (n: Node) => n.id === id
+    ? { ...n, status: newStatus } : n
+  const pred = (n: Node) => n.id === id
+  return updateNode(root, update, pred);
+}
+
+function handleTacticClick(root: Node, id: string): Node {
   const previouslyExplored = false //TODO
   const previousNodeWasParent = true //TODO
   const previousNodeWasDescendant = false //TODO
 
   if (previouslyExplored) {
-    // TODO restore status of subtree when abandoned
+    // TODO
+    // restore status of subtree when abandoned
     // including which node was selected
-    return goal
+    return root
   } else {
-    var newGoal = changeStatus(goal, (n: Node) => n.id == id, 'selected')
-    return {
-      ...newGoal, children:
-        newGoal.children.map(t => changeTacticStatus(t, 'unselected'))
-    }
+    // change node status to "selected"
+    var newGoal = changeStatusAtId(root, id, 'selected')
+    // TODO
+    // show subgoals
+    // if none, retrace path upward marking applicable nodes as final
+    return newGoal
   }
 
   if (previousNodeWasParent) {
-    changeStatus(goal, (n: Node) => n.status === 'selected', 'semiselected')
+    // note: if the previous node was a non-parent ancestor, the
+    // current node should never have been clickable
+    // change parent to semiselected
+    changeStatusAtSelected(root, 'semiselected')
   } else if (previousNodeWasDescendant) {
     // Change status of all nodes in applicable child subtree of current node to “unselected”
     // Hide that subtree, with:
     // Ellipsis
     // Caching
     // Marking for completeness retained
-    return goal //TODO
+    return root //TODO
   } else {
     //Change status of neighboring ancestor of that node to “unselected”
     // Hide neighboring ancestor subtree, with:
     // Ellipsis
     // Caching of subtree
     // Marking for completeness retained
-    return goal //TODO
+    return root //TODO
   }
 
   // restore stuff OR
   //    show applicable tactics
   // maybe hide stuff
-  return goal
-  return goal
+  return root
 }
 
-function treeValid(goal: Goal): boolean {
+function treeValid(root: Node): boolean {
   /* Incomplete list of invariants:
   - all IDs are unique
   - all children of goals are tactics
@@ -126,11 +126,7 @@ function treeValid(goal: Goal): boolean {
   return true // TODO
 }
 
-function changeTacticStatus(t: Tactic, s: Status): Tactic {
-  return { ...t, status: s }
-}
-
-function handleGoalClick(goal: Goal, id: string): Goal {
+function handleGoalClick(root: Node, clickedId: string): Node {
   const previouslyExplored = false //TODO
   const previousNodeWasParent = true //TODO
   const previousNodeWasDescendant = false //TODO
@@ -138,46 +134,47 @@ function handleGoalClick(goal: Goal, id: string): Goal {
   if (previouslyExplored) {
     // TODO restore status of subtree when abandoned
     // including which node was selected
-    return goal
+    return root
   } else {
-    var newGoal = changeStatus(goal, (n: Node) => n.id == id, 'selected')
+    var newGoal = changeStatusAtId(root, clickedId, 'selected')
     // todo this is mapping over the wrong children
     return {
       ...newGoal, children:
-        newGoal.children.map(t => changeTacticStatus(t, 'unselected'))
+        newGoal.children.map(t =>
+          changeStatusAtId(root, t.id, 'unselected'))
     }
   }
 
   if (previousNodeWasParent) {
-    changeStatus(goal, (n: Node) => n.status === 'selected', 'semiselected')
+    changeStatusAtSelected(root, 'semiselected')
   } else if (previousNodeWasDescendant) {
     // Change status of all nodes in applicable child subtree of current node to “unselected”
     // Hide that subtree, with:
     // Ellipsis
     // Caching
     // Marking for completeness retained
-    return goal //TODO
+    return root //TODO
   } else {
     //Change status of neighboring ancestor of that node to “unselected”
     // Hide neighboring ancestor subtree, with:
     // Ellipsis
     // Caching of subtree
     // Marking for completeness retained
-    return goal //TODO
+    return root //TODO
   }
 
   // restore stuff OR
   //    show applicable tactics
   // maybe hide stuff
-  return goal
+  return root
 }
 
-function HoverflyTree({ goal, onClick }: { goal: Goal, onClick: (id: string) => void },) {
-
+function HoverflyTree({ root, onClick }
+  : { root: Node, onClick: (id: string) => void },) {
   return (
     <>
       <ul>
-        {renderGoal(goal, onClick)}
+        {renderNode(root, onClick)}
       </ul>
     </>
   )
@@ -189,7 +186,8 @@ function Hoverfly() {
   const st = useAsync(() =>
     rs.call('getInitialState', ""), [rs])
 
-  return st.state === 'resolved' ? <HoverflyTree goal={st.value as Goal} onClick={(id: string) => { }} />
+  return st.state === 'resolved'
+    ? <HoverflyTree root={st.value as Node} onClick={(id: string) => { }} />
     : st.state === 'rejected' ?
       <p>{mapRpcError(st.error).message}</p>
       : <p>Loading...</p>
