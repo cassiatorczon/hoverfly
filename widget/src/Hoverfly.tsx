@@ -2,6 +2,7 @@ import { Fragment, useState } from 'react'
 import { useRpcSession, useAsync, mapRpcError } from '@leanprover/infoview';
 // import './App.css'
 
+type ID = string
 
 type Kind = "tactic" | "goal"
 
@@ -9,13 +10,15 @@ type Status = "selected" | "semiselected" | "unselected"
 
 type Node = {
   kind: Kind, // tactic or goal
-  id: string, // should be unique among all nodes
-  name: string, // Lean-recognizable description
+  id: ID, // should be unique among all nodes
+  data: string, // Lean-recognizable description
   final: boolean, // whether a goal is completed/a tactic is in the final script
   children: Node[], // applicable tactics for a goal, subgoals for a tactic
   status: Status, // display information
   visible: boolean // visibility in display
 }
+
+// type Node = Readonly<MutableNode>
 
 function updateNode(
   root: Node,
@@ -35,19 +38,19 @@ function updateNode(
 }
 
 
-function renderNode(n: Node, onClick: (id: string) => void): React.ReactNode {
+function renderNode(n: Node, onClick: (id: ID) => void): React.ReactNode {
   if (!n.visible) {
     return
   }
 
   return (
     <Fragment key={n.id}>
-      <li onClick={() => onClick(n.id)}>{n.name} [{n.status}]</li>
+      <li onClick={() => onClick(n.id)}>{n.data} [{n.status}]</li>
       <ul> {n.children.map((child: Node) => renderNode(child, onClick))}</ul >
     </Fragment>)
 }
 
-function changeNodeVisibility(n: Node, visible: boolean): Node {
+function changeNodeVisibility(n: Readonly<Node>, visible: boolean): Node {
   return { ...n, visible: true }
 }
 
@@ -58,17 +61,50 @@ function changeStatusAtSelected(root: Node, newStatus: Status): Node {
   return updateNode(root, update, breakAfter)
 }
 
-function changeStatusAtId(root: Node, id: string, newStatus: Status): Node {
+function changeStatusAtId(root: Node, id: ID, newStatus: Status): Node {
   const update = (n: Node) => n.id === id
     ? { ...n, status: newStatus } : n
   const pred = (n: Node) => n.id === id
   return updateNode(root, update, pred);
 }
 
-function handleTacticClick(root: Node, id: string): Node {
+function isNonstrictAncestorOf(parentCand: Readonly<Node>, childId: ID)
+  : boolean {
+  if (parentCand.id === childId) {
+    return true
+  } else {
+    return parentCand.children.some(
+      (v: Node) => isNonstrictAncestorOf(v, childId))
+  }
+}
+
+function nearestCommonAncestorWithSelected(n: Readonly<Node>, id: ID):
+  Readonly<Node> {
+  const selectedNonstrictAncestor = n.children.find(
+    (c: Node) => c.status === 'semiselected' || c.status === 'selected')
+  if (selectedNonstrictAncestor) {
+    if (isNonstrictAncestorOf(selectedNonstrictAncestor, id)) {
+      return selectedNonstrictAncestor.id === id
+        ? selectedNonstrictAncestor
+        : nearestCommonAncestorWithSelected(selectedNonstrictAncestor, id)
+    } else {
+      return n
+    }
+  } else {
+    // Note: this should only happen if n is selected
+    return n
+  }
+}
+
+function handleTacticClick(root: Node, clicked: Node): Node {
   const previouslyExplored = false //TODO
   const previousNodeWasParent = true //TODO
   const previousNodeWasDescendant = false //TODO
+
+  const nca = nearestCommonAncestorWithSelected(root, clicked.id);
+  if (nca.id === clicked.id) {
+
+  }
 
   if (previouslyExplored) {
     // TODO
@@ -77,7 +113,7 @@ function handleTacticClick(root: Node, id: string): Node {
     return root
   } else {
     // change node status to "selected"
-    var newGoal = changeStatusAtId(root, id, 'selected')
+    var newGoal = changeStatusAtId(root, clicked.id, 'selected')
     // TODO
     // show subgoals
     // if none, retrace path upward marking applicable nodes as final
@@ -111,7 +147,7 @@ function handleTacticClick(root: Node, id: string): Node {
   return root
 }
 
-function treeValid(root: Node): boolean {
+function treeValid(root: Readonly<Node>): boolean {
   /* Incomplete list of invariants:
   - all IDs are unique
   - all children of goals are tactics
@@ -126,7 +162,7 @@ function treeValid(root: Node): boolean {
   return true // TODO
 }
 
-function handleGoalClick(root: Node, clickedId: string): Node {
+function handleGoalClick(root: Node, clickedId: ID): Node {
   const previouslyExplored = false //TODO
   const previousNodeWasParent = true //TODO
   const previousNodeWasDescendant = false //TODO
@@ -170,7 +206,7 @@ function handleGoalClick(root: Node, clickedId: string): Node {
 }
 
 function HoverflyTree({ root, onClick }
-  : { root: Node, onClick: (id: string) => void },) {
+  : { root: Node, onClick: (id: ID) => void },) {
   return (
     <>
       <ul>
@@ -187,7 +223,7 @@ function Hoverfly() {
     rs.call('getInitialState', ""), [rs])
 
   return st.state === 'resolved'
-    ? <HoverflyTree root={st.value as Node} onClick={(id: string) => { }} />
+    ? <HoverflyTree root={st.value as Node} onClick={(id: ID) => { }} />
     : st.state === 'rejected' ?
       <p>{mapRpcError(st.error).message}</p>
       : <p>Loading...</p>
