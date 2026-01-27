@@ -1,9 +1,4 @@
 import ProofWidgets
--- inductive Status : Type where
---   | selected -- status for current single node selected
---   | semiselected  -- status for all ancestors of selected node
---   | unselected -- status for all other visible nodes
---   -- | hidden -- status for hidden children
 
 -- TODO namespaces
 open Lean ProofWidgets
