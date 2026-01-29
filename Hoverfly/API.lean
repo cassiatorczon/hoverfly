@@ -3,29 +3,26 @@ import ProofWidgets
 -- TODO namespaces
 open Lean ProofWidgets
 
--- TODO should these be the same
-def GoalId := String
-def TacticId := String
+-- -- TODO should these be the same
+-- def GoalId := String
+-- def String := String
 
-instance : ToJson GoalId := inferInstanceAs (ToJson String)
-instance : FromJson GoalId := inferInstanceAs (FromJson String)
+instance : ToJson String := inferInstanceAs (ToJson String)
+instance : FromJson String := inferInstanceAs (FromJson String)
 
-instance : ToJson TacticId := inferInstanceAs (ToJson String)
-instance : FromJson TacticId := inferInstanceAs (FromJson String)
+instance : ToJson String := inferInstanceAs (ToJson String)
+instance : FromJson String := inferInstanceAs (FromJson String)
 
 mutual
 structure Goal where
-  id : GoalId
-  name : String
-  -- status : Status
+  id : String
+  data : String
   children : List Tactic
-  completed : Bool
   deriving ToJson, FromJson
 
 structure Tactic where
-  id : TacticId
-  name : String
-  -- status : Status
+  id : String
+  data : String
   children : List Goal
   deriving ToJson, FromJson
 end
@@ -44,36 +41,73 @@ open Lean ProofWidgets Server
 @[server_rpc_method]
 def getInitialState (_ : String) : RequestM (RequestTask Goal) :=
   -- TODO
-  pure $ RequestTask.pure
+  RequestM.asTask $ pure
     {
       id:= "g0",
-      name:= "P /\\ Q", completed:= false, children:= [
+      data:= "P /\\ Q", children:= [
         {
           id:= "t0",
-          name:= "split", children:= [
-            { id:= "g1", name:= "P", completed:= false, children:= []},
-            { id:= "g2", name:= "Q", completed:= false, children:= []},
+          data:= "split", children:= [
+            { id:= "g1", data:= "P", children:= []},
+            { id:= "g2", data:= "Q", children:= []},
           ]
         }
       ]
     }
 
 @[server_rpc_method]
-def chooseTactic (_ : TacticId) : RequestM (RequestTask Goal) :=
+def getSubgoals (t : Tactic) : RequestM (RequestTask (List Goal)) :=
   -- TODO
-  pure $ RequestTask.pure
-  {
-    id:= "g0",
-    name:= "P /\\ Q", completed:= false, children:= [
-      {
-        id:= "t0",
-        name:= "split", children:= [
-          { id:= "g1", name:= "P", completed:= false, children:= []},
-          { id:= "g2", name:= "Q", completed:= false, children:= []},
-        ]
-      }
-    ]
-  }
+  RequestM.pureTask $
+    if (t.id == "t0")
+      then
+        pure
+          [
+            {
+            id:= "g0",
+            data:= "P", children:= []},
+            {
+            id:= "g1",
+            data:= "Q", children:= []}
+            ]
+      else
+        if (t.id == "t1")
+          then
+            pure
+              []
+          else
+            pure
+              []
+
+
+@[server_rpc_method]
+def getApplicableTactics (g : Goal) : RequestM (RequestTask (List Tactic)) :=
+  -- TODO
+  RequestM.pureTask $
+    if (g.id == "g0")
+      then
+        pure
+          [
+            {
+            id:= "t0",
+            data:= "split", children:= []}
+            ]
+      else
+        if (g.id == "g1")
+          then
+            pure
+              [
+                {
+                id:= "t1",
+                data:= "exact P", children:= []}
+              ]
+          else
+            pure
+              [
+                {
+                id:= "t1",
+                data:= "exact Q", children:= []}
+              ]
 
 @[widget_module]
 def checkWidget : Widget.Module where
