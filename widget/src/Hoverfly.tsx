@@ -180,6 +180,7 @@ function nearestCommonAncestorWithSelected(n: Node, id: ID):
 async function handleClick(root: Node, clicked: Node, rs: RpcSessionAtPos): Promise<Node> {
 
   if (clicked.status === 'selected') {
+    console.log("Node " + clicked.id + " was already selected.")
     // User has clicked the already-selected node. Do nothing.
     return root
   }
@@ -187,6 +188,7 @@ async function handleClick(root: Node, clicked: Node, rs: RpcSessionAtPos): Prom
   const nca = nearestCommonAncestorWithSelected(root, clicked.id)
 
   if (nca.id === clicked.id) {
+    console.log("Case 1: nca " + nca.id + " clicked " + clicked.id)
     // previously selected node was a descendant of clicked node
     // cache applicable subtree of clicked node
     // change cliked node status to 'selected
@@ -197,6 +199,7 @@ async function handleClick(root: Node, clicked: Node, rs: RpcSessionAtPos): Prom
     const breakAfter = (n: Node) => n.id === nca.id
     return updateNodes(root, update, breakAfter)
   } else if (nca.status === 'selected') {
+    console.log("Case 2: nca " + nca.id + " clicked " + clicked.id)
     // previously selected node was an ancestor of clicked node
 
     // if the previous node was a non-parent ancestor, the
@@ -209,6 +212,7 @@ async function handleClick(root: Node, clicked: Node, rs: RpcSessionAtPos): Prom
 
     const breakAfter = (n: Node) => n.id === clicked.id
     if (clicked.explored) {
+      console.log("Restoring cache.")
       // restore cache at clicked node
 
       if (!clicked.cache) {
@@ -219,8 +223,9 @@ async function handleClick(root: Node, clicked: Node, rs: RpcSessionAtPos): Prom
         return updateNodes(parentUpdated, update, breakAfter)
       }
     } else {
+      console.log("Unexplored node " + clicked.id)
       // change node status to selected
-      const clickedUpdated = changeStatusAtId(root, clicked.id, 'selected')
+      const clickedUpdated = changeStatusAtId(parentUpdated, clicked.id, 'selected')
 
       const update = async (n: Node) => n.id === clicked.id
         ? n.kind === 'goal'
@@ -230,6 +235,7 @@ async function handleClick(root: Node, clicked: Node, rs: RpcSessionAtPos): Prom
       return updateNodes(await clickedUpdated, update, breakAfter)
     }
   } else {
+    console.log("Case 3: nca " + nca.id + " clicked " + clicked.id)
     // new node should be an immediate child of nca
     assert(nca.children.some((c: Node) => c.id === clicked.id),
       "Non-child descendant of nearest common ancestor of previously " +
