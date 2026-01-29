@@ -175,66 +175,9 @@ function nearestCommonAncestorWithSelected(n: Node, id: ID):
   }
 }
 
-/* Handlers */
-
-function handleTacticClick(root: Node, clicked: Node): Node {
-  const previouslyExplored = false //TODO
-
-  if (clicked.status === 'selected') {
-    // User has clicked the already-selected node. Do nothing.
-    return root
-  }
-  const nca = nearestCommonAncestorWithSelected(root, clicked.id)
-
-  var newGoal;
-  if (previouslyExplored) {
-    // TODO
-    // restore status of subtree when abandoned
-    // including which node was selected
-    newGoal = root
-  } else {
-    // change node status to "selected"
-    var newGoal1 = changeStatusAtId(root, clicked.id, 'selected')
-    // TODO
-    // show subgoals
-    // if none, retrace path upward marking applicable nodes as completed
-    newGoal = newGoal1
-  }
-
-  if (nca.id === clicked.id) {
-    // previously selected node was a descendant of clicked node
-    // Change status of all nodes in applicable child subtree of current node to “unselected”
-    // Hide that subtree, with:
-    // Ellipsis
-    // Caching
-    // Marking for completeness retained
-    newGoal = root //TODO
-  } else if (nca.status === 'selected') {
-    // if the previous node was a non-parent ancestor, the
-    // current node should never have been clickable
-    assert(nca.children.some((c: Node) => c.id === clicked.id),
-      "Non-child descendant of selected node should not be clickable.")
-    // change parent to semiselected
-    changeStatusAtSelected(root, 'semiselected')
-  } else {
-    //Change status of neighboring ancestor of that node to “unselected”
-    // Hide neighboring ancestor subtree, with:
-    // Ellipsis
-    // Caching of subtree
-    // Marking for completeness retained
-    return root //TODO
-  }
-
-  // restore stuff OR
-  //    show applicable tactics
-  // maybe hide stuff
-  return root
-}
+/* Handler */
 
 async function handleClick(root: Node, clicked: Node, rs: RpcSessionAtPos): Promise<Node> {
-  const previouslyExplored = false //TODO
-  const previousNodeWasParent = true //TODO
-  const previousNodeWasDescendant = false //TODO
 
   if (clicked.status === 'selected') {
     // User has clicked the already-selected node. Do nothing.
@@ -306,43 +249,6 @@ async function handleClick(root: Node, clicked: Node, rs: RpcSessionAtPos): Prom
     return updateNodes(root, updateClicked, breakAfterClicked)
   }
 }
-// if (previouslyExplored) {
-//   // TODO restore status of subtree when abandoned
-//   // including which node was selected
-//   return root
-// } else {
-//   var newGoal = changeStatusAtId(root, clickedId, 'selected')
-//   // todo this is mapping over the wrong children
-//   return {
-//     ...newGoal, children:
-//       newGoal.children.map(t =>
-//         changeStatusAtId(root, t.id, 'unselected'))
-//   }
-// }
-
-// if (previousNodeWasParent) {
-//   changeStatusAtSelected(root, 'semiselected')
-// } else if (previousNodeWasDescendant) {
-//   // Change status of all nodes in applicable child subtree of current node to “unselected”
-//   // Hide that subtree, with:
-//   // Ellipsis
-//   // Caching
-//   // Marking for completeness retained
-//   return root //TODO
-// } else {
-//   //Change status of neighboring ancestor of that node to “unselected”
-//   // Hide neighboring ancestor subtree, with:
-//   // Ellipsis
-//   // Caching of subtree
-//   // Marking for completeness retained
-//   return root //TODO
-// }
-
-// // restore stuff OR
-// //    show applicable tactics
-// // maybe hide stuff
-// return root
-//}
 
 /* Util */
 
@@ -353,42 +259,6 @@ function assert(p: boolean, e: string): void {
 }
 
 /* External */
-
-// given a goal node, returns the same node with
-// applicable tactics added as children
-async function getApplicableTactics(n: Node, rs: RpcSessionAtPos): Promise<Node> {
-  assert(n.kind == 'goal',
-    "Called getApplicableTactics on tactic node " + n.id)
-
-  const g = nodeToLeanGoal(n)
-  const tactics: LeanTactic[] = await rs.call("getApplicableTactics", g)
-  const tsxTactics = tactics.map((t: LeanTactic) => leanTacticToNode(t))
-  return { ...n, children: tsxTactics }
-}
-
-// given a tactic node, returns the same node with
-// subgoals added as children
-async function getSubgoals(n: Node, rs: RpcSessionAtPos): Promise<Node> {
-  assert(n.kind == 'tactic',
-    "Called getSubgoals on goal node " + n.id)
-
-  const t = nodeToLeanTactic(n)
-  const subgoals: LeanGoal[] = await rs.call("getSubgoals", t)
-  const tsxGoals = subgoals.map((g: LeanGoal) => leanGoalToNode(g))
-  return { ...n, children: tsxGoals }
-}
-
-// type MutableNode = {
-//   kind: Kind, // tactic or goal
-//   id: ID, // should be unique among all nodes; must have an immutable type
-//   data: string, // Lean-recognizable description
-//   completed: boolean, // a completed goal or tactic with all completed subgoals
-//   children: Node[], // applicable tactics for a goal, subgoals for a tactic
-//   status: Status, // display information
-//   visible: boolean, // visibility in display
-//   explored: boolean, // whether the node has been explored
-//   cache: Node | undefined // previous version of the subtree rooted at this node
-// }
 
 type LeanGoal = {
   id: string
@@ -404,7 +274,7 @@ type LeanTactic = {
 
 function leanGoalToNode(g: LeanGoal): Node {
   return {
-    kind: 'tactic',
+    kind: 'goal',
     id: g.id,
     data: g.data,
     completed: false,
@@ -431,7 +301,8 @@ function leanTacticToNode(t: LeanTactic): Node {
 }
 
 function nodeToLeanGoal(g: Node): LeanGoal {
-  assert(g.kind === 'goal', "Tried to convert tactic to Lean goal")
+  assert(g.kind === 'goal',
+    "Tried to convert node " + g.id + " of kind " + g.kind + " to Lean goal")
   return {
     id: g.id,
     data: g.data,
@@ -440,7 +311,8 @@ function nodeToLeanGoal(g: Node): LeanGoal {
 }
 
 function nodeToLeanTactic(t: Node): LeanTactic {
-  assert(t.kind === 'tactic', "Tried to convert goal to Lean tactic")
+  assert(t.kind === 'tactic',
+    "Tried to convert node " + t.id + " of kind " + t.kind + " to Lean tactic")
   return {
     id: t.id,
     data: t.data,
@@ -448,19 +320,41 @@ function nodeToLeanTactic(t: Node): LeanTactic {
   }
 }
 
+// given a goal node, returns the same node with
+// applicable tactics added as children
+async function getApplicableTactics(n: Node, rs: RpcSessionAtPos): Promise<Node> {
+  assert(n.kind == 'goal',
+    "Called getApplicableTactics on tactic node " + n.id)
 
+  const g = nodeToLeanGoal(n)
+  const tactics: LeanTactic[] = await rs.call("getApplicableTactics", g)
+  const tsxTactics = tactics.map((t: LeanTactic) => leanTacticToNode(t))
+  return { ...n, children: tsxTactics }
+}
+
+// given a tactic node, returns the same node with
+// subgoals added as children
+async function getSubgoals(n: Node, rs: RpcSessionAtPos): Promise<Node> {
+  assert(n.kind == 'tactic',
+    "Called getSubgoals on goal node " + n.id)
+
+  const t = nodeToLeanTactic(n)
+  const subgoals: LeanGoal[] = await rs.call("getSubgoals", t)
+  const tsxGoals = subgoals.map((g: LeanGoal) => leanGoalToNode(g))
+  return { ...n, children: tsxGoals }
+}
 
 /* React */
 
-
 function renderNode(n: Node, onClick: (clicked: Node) => Promise<void>): React.ReactNode {
+  console.log("Rendering " + n.id)
   if (!n.visible) {
     return
   }
 
   return (
     <Fragment key={n.id}>
-      <li onClick={() => onClick(n)}>{n.data} [{n.status}]</li>
+      <li onClick={() => onClick(n)}>{n.data} [{n.status}, {n.explored}, {n.id}, {n.kind}]</li>
       <ul> {n.children.map((child: Node) => renderNode(child, onClick))}</ul >
     </Fragment>)
 }
@@ -487,10 +381,11 @@ function Hoverfly() {
     }
     )
 
-  }, [rs, root])
+  }, [rs])
 
   if (root !== null) {
     const onClick = async (n: Node) => {
+      console.log("Clicked " + n.id)
       setRoot(await handleClick(root, n, rs))
     }
     return <><HoverflyTree root={root} onClick={onClick} /></>
