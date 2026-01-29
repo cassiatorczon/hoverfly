@@ -1,5 +1,5 @@
 import { Fragment, useState } from 'react'
-import { useRpcSession, useAsync, mapRpcError } from '@leanprover/infoview';
+import { useRpcSession, useAsync, mapRpcError, RpcSessionAtPos } from '@leanprover/infoview';
 // import './App.css'
 
 type ID = string
@@ -100,20 +100,19 @@ function checkTree(root: Node): void {
 
 /* Update tree */
 
-function updateNodes(
+async function updateNodes(
   n: Node,
-  update: (n: Node) => Node,
+  update: (n: Node) => Promise<Node>,
   breakAfter: ((n: Node) => boolean)):
-  Node {
-  const newNode = update(n);
+  Promise<Node> {
+  const newNode = await update(n);
 
   if (breakAfter(n)) {
     return newNode
   }
 
   return {
-    ...newNode, children: newNode.children.map(g =>
-      updateNodes(g, update, breakAfter))
+    ...newNode, children: await Promise.all(newNode.children.map((g) => updateNodes(g, update, breakAfter)))
   }
 }
 
@@ -121,16 +120,15 @@ function changeNodeVisibility(n: Node, newVis: boolean): Node {
   return { ...n, visible: newVis }
 }
 
-function changeStatusAtSelected(root: Node, newStatus: Status): Node {
-  const update = (n: Node) => n.status === 'selected'
+async function changeStatusAtSelected(root: Node, newStatus: Status): Promise<Node> {
+  const update = async (n: Node) => n.status === 'selected'
     ? { ...n, status: newStatus } : n
   const breakAfter = (n: Node) => n.status === 'selected'
   return updateNodes(root, update, breakAfter)
 }
 
-function changeStatusAtId(root: Node, id: ID, newStatus: Status): Node {
-  const update = (n: Node) => n.id === id
-    ? { ...n, status: newStatus } : n
+async function changeStatusAtId(root: Node, id: ID, newStatus: Status): Promise<Node> {
+  const update = async (n: Node) => n.id === id ? { ...n, status: newStatus } : n
   const pred = (n: Node) => n.id === id
   return updateNodes(root, update, pred);
 }
@@ -235,7 +233,7 @@ function handleTacticClick(root: Node, clicked: Node): Node {
   return root
 }
 
-function handleClick(root: Node, clicked: Node): Node {
+async function handleClick(root: Node, clicked: Node, rs: RpcSessionAtPos): Promise<Node> {
   const previouslyExplored = false //TODO
   const previousNodeWasParent = true //TODO
   const previousNodeWasDescendant = false //TODO
@@ -254,7 +252,7 @@ function handleClick(root: Node, clicked: Node): Node {
     const ncaPostCache = cacheChild(nca)
     const ncaNewStatus = changeStatusAtId(root, ncaPostCache.id, 'selected')
 
-    const update = (n: Node) => n.id === nca.id ? ncaNewStatus : n
+    const update = async (n: Node) => n.id === nca.id ? ncaNewStatus : n
     const breakAfter = (n: Node) => n.id === nca.id
     return updateNodes(root, update, breakAfter)
   } else if (nca.status === 'selected') {
@@ -266,7 +264,7 @@ function handleClick(root: Node, clicked: Node): Node {
       "Non-child descendant of selected node should not be clickable.")
 
     // change parent to semiselected
-    const parentUpdated = changeStatusAtSelected(root, 'semiselected')
+    const parentUpdated = await changeStatusAtSelected(root, 'semiselected')
 
     const breakAfter = (n: Node) => n.id === clicked.id
     if (clicked.explored) {
@@ -276,20 +274,19 @@ function handleClick(root: Node, clicked: Node): Node {
         throw new
           Error("Attempted to restore nonexistent cache at node " + clicked.id)
       } else {
-        const update = (n: Node) =>
-          n.id === clicked.id ? (clicked.cache as Node) : n
+        const update = async (n: Node) => n.id === clicked.id ? (clicked.cache as Node) : n
         return updateNodes(parentUpdated, update, breakAfter)
       }
     } else {
       // change node status to selected
       const clickedUpdated = changeStatusAtId(root, clicked.id, 'selected')
 
-      const update = (n: Node) => n.id === clicked.id
+      const update = async (n: Node) => n.id === clicked.id
         ? n.kind === 'goal'
-          ? { ...getApplicableTactics(n), explored: true }
-          : getSubgoals(n)
+          ? { ...await getApplicableTactics(n, rs), explored: true }
+          : await getSubgoals(n, rs)
         : n
-      return updateNodes(clickedUpdated, update, breakAfter)
+      return updateNodes(await clickedUpdated, update, breakAfter)
     }
   } else {
     // new node should be an immediate child of nca
@@ -299,11 +296,11 @@ function handleClick(root: Node, clicked: Node): Node {
 
     // cache branch corresponding to previous node
     const newNca = cacheChild(nca)
-    const updateNca = (n: Node) => n.id === nca.id ? newNca : n
+    const updateNca = async (n: Node) => n.id === nca.id ? newNca : n
     const breakAfterNca = (n: Node) => n.id === nca.id
     const newGoal = updateNodes(root, updateNca, breakAfterNca)
 
-    const updateClicked = (n: Node) =>
+    const updateClicked = async (n: Node) =>
       n.id === clicked.id
         ? ({ ...n, status: 'selected', explored: true } as Node)
         : n
@@ -361,7 +358,7 @@ function assert(p: boolean, e: string): void {
 
 // given a goal node, returns the same node with
 // applicable tactics added as children
-function getApplicableTactics(n: Node): Node {
+async function getApplicableTactics(n: Node, rs: RpcSessionAtPos): Promise<Node> {
   assert(n.kind == 'goal',
     "Called getApplicableTactics on tactic node " + n.id)
 
@@ -370,9 +367,12 @@ function getApplicableTactics(n: Node): Node {
 
 // given a tactic node, returns the same node with
 // subgoals added as children
-function getSubgoals(n: Node): Node {
+async function getSubgoals(n: Node, rs: RpcSessionAtPos): Promise<Node> {
   assert(n.kind == 'tactic',
     "Called getSubgoals on goal node " + n.id)
+
+  // const foo = await rs.call("<methodname>", "<params>")
+  // ... do stuff with foo
 
   throw new Error("TODO")
 }
@@ -380,20 +380,19 @@ function getSubgoals(n: Node): Node {
 /* React */
 
 
-function renderNode(n: Node, onClick: (id: ID) => void): React.ReactNode {
+function renderNode(n: Node, onClick: (clicked: Node) => Promise<void>): React.ReactNode {
   if (!n.visible) {
     return
   }
 
   return (
     <Fragment key={n.id}>
-      <li onClick={() => onClick(n.id)}>{n.data} [{n.status}]</li>
+      <li onClick={() => onClick(n)}>{n.data} [{n.status}]</li>
       <ul> {n.children.map((child: Node) => renderNode(child, onClick))}</ul >
     </Fragment>)
 }
 
-function HoverflyTree({ root, onClick }
-  : { root: Node, onClick: (id: ID) => void },) {
+function HoverflyTree({ root, onClick }: { root: Node, onClick: (n: Node) => Promise<void> },) {
   return (
     <>
       <ul>
@@ -409,11 +408,18 @@ function Hoverfly() {
   const st = useAsync(() =>
     rs.call('getInitialState', ""), [rs])
 
-  return st.state === 'resolved'
-    ? <HoverflyTree root={st.value as Node} onClick={(id: ID) => { }} />
-    : st.state === 'rejected' ?
-      <p>{mapRpcError(st.error).message}</p>
-      : <p>Loading...</p>
+  if (st.state === 'resolved') {
+    const onClick = async (n: Node) => {
+      handleClick(st.value as Node, n, rs);
+      return; // FIXME: This probably needs to actually set the new state
+    }
+    return <HoverflyTree root={st.value as Node} onClick={onClick} />
+  } else if (st.state === 'rejected') {
+
+    return <p>{mapRpcError(st.error).message}</p>
+  } else {
+    return <p>Loading...</p>
+  }
 }
 
 export default Hoverfly
