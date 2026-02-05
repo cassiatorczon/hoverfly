@@ -191,9 +191,9 @@ async function handleClick(root: Node, clicked: Node, rs: RpcSessionAtPos): Prom
     console.log("Case 1: nca " + nca.id + " clicked " + clicked.id)
     // previously selected node was a descendant of clicked node
     // cache applicable subtree of clicked node
-    // change cliked node status to 'selected
+    // change clicked node status to 'selected
     const ncaPostCache = cacheChild(nca)
-    const ncaNewStatus = changeStatusAtId(root, ncaPostCache.id, 'selected')
+    const ncaNewStatus: Node = { ...ncaPostCache, status: 'selected' }
 
     const update = async (n: Node) => n.id === nca.id ? ncaNewStatus : n
     const breakAfter = (n: Node) => n.id === nca.id
@@ -266,19 +266,19 @@ function assert(p: boolean, e: string): void {
 
 /* External */
 
-type LeanGoal = {
+type APIGoal = {
   id: string
   data: string
-  children: LeanTactic[]
+  children: APITactic[]
 }
 
-type LeanTactic = {
+type APITactic = {
   id: string
   data: string
-  children: LeanGoal[]
+  children: APIGoal[]
 }
 
-function leanGoalToNode(g: LeanGoal): Node {
+function APIGoalToNode(g: APIGoal): Node {
   return {
     kind: 'goal',
     id: g.id,
@@ -288,11 +288,11 @@ function leanGoalToNode(g: LeanGoal): Node {
     visible: true,
     explored: false,
     cache: undefined,
-    children: g.children.map((t: LeanTactic) => leanTacticToNode(t))
+    children: g.children.map((t: APITactic) => APITacticToNode(t))
   }
 }
 
-function leanTacticToNode(t: LeanTactic): Node {
+function APITacticToNode(t: APITactic): Node {
   return {
     kind: 'tactic',
     id: t.id,
@@ -302,27 +302,27 @@ function leanTacticToNode(t: LeanTactic): Node {
     visible: true,
     explored: false,
     cache: undefined,
-    children: t.children.map((g: LeanGoal) => leanGoalToNode(g))
+    children: t.children.map((g: APIGoal) => APIGoalToNode(g))
   }
 }
 
-function nodeToLeanGoal(g: Node): LeanGoal {
+function nodeToAPIGoal(g: Node): APIGoal {
   assert(g.kind === 'goal',
     "Tried to convert node " + g.id + " of kind " + g.kind + " to Lean goal")
   return {
     id: g.id,
     data: g.data,
-    children: g.children.map((t: Node) => nodeToLeanTactic(t))
+    children: g.children.map((t: Node) => nodeToAPITactic(t))
   }
 }
 
-function nodeToLeanTactic(t: Node): LeanTactic {
+function nodeToAPITactic(t: Node): APITactic {
   assert(t.kind === 'tactic',
     "Tried to convert node " + t.id + " of kind " + t.kind + " to Lean tactic")
   return {
     id: t.id,
     data: t.data,
-    children: t.children.map((g: Node) => nodeToLeanGoal(g))
+    children: t.children.map((g: Node) => nodeToAPIGoal(g))
   }
 }
 
@@ -332,9 +332,9 @@ async function getApplicableTactics(n: Node, rs: RpcSessionAtPos): Promise<Node>
   assert(n.kind == 'goal',
     "Called getApplicableTactics on tactic node " + n.id)
 
-  const g = nodeToLeanGoal(n)
-  const tactics: LeanTactic[] = await rs.call("getApplicableTactics", g)
-  const tsxTactics = tactics.map((t: LeanTactic) => leanTacticToNode(t))
+  const g = nodeToAPIGoal(n)
+  const tactics: APITactic[] = await rs.call("getApplicableTactics", g)
+  const tsxTactics = tactics.map((t: APITactic) => APITacticToNode(t))
   return { ...n, children: tsxTactics }
 }
 
@@ -344,9 +344,9 @@ async function getSubgoals(n: Node, rs: RpcSessionAtPos): Promise<Node> {
   assert(n.kind == 'tactic',
     "Called getSubgoals on goal node " + n.id)
 
-  const t = nodeToLeanTactic(n)
-  const subgoals: LeanGoal[] = await rs.call("getSubgoals", t)
-  const tsxGoals = subgoals.map((g: LeanGoal) => leanGoalToNode(g))
+  const t = nodeToAPITactic(n)
+  const subgoals: APIGoal[] = await rs.call("getSubgoals", t)
+  const tsxGoals = subgoals.map((g: APIGoal) => APIGoalToNode(g))
   return { ...n, children: tsxGoals }
 }
 
@@ -381,7 +381,7 @@ function Hoverfly() {
 
   useEffect(() => {
     rs.call('getInitialState', "").then((st) => {
-      const n = leanGoalToNode(st as LeanGoal)
+      const n = APIGoalToNode(st as APIGoal)
       const selectedN: Node = { ...n, status: 'selected' }
       setRoot(selectedN)
     }
