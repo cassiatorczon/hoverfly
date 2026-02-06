@@ -68,7 +68,6 @@ decreasing_by
   simp_all
   rw [Nat.add_assoc]
   rw [Nat.add_assoc]
-  -- rw [Nat.add_comm]
   rw [Nat.lt_one_add_iff]
   rw [← Nat.add_assoc]
   apply Nat.le_add_left_of_le
@@ -83,7 +82,6 @@ decreasing_by
   simp_all
   rw [Nat.add_assoc]
   rw [Nat.add_assoc]
-  -- rw [Nat.add_comm]
   rw [Nat.lt_one_add_iff]
   rw [← Nat.add_assoc]
   apply Nat.le_add_left_of_le
