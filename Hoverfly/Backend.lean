@@ -10,6 +10,43 @@ inductive Tactic : Type where
 
 end
 
+--TODO
+def t0 := Tactic.Tactic "t0" "split" []
+def t1 := Tactic.Tactic "t1" "id" []
+def t2 := Tactic.Tactic "t2" "exact P" []
+def t3 := Tactic.Tactic "t3" "exact Q" []
+def g0 := Goal.Goal "g0" "P /\\ Q" [t0, t1]
+def g1 := Goal.Goal "g1" "P" []
+def g2 := Goal.Goal "g2" "Q" []
+def g3 := Goal.Goal "g3" "P /\\ Q" []
+
+-- TODO
+def getInitialState (_ : String) : Goal := g0
+
+def getSubgoals (t : Tactic) : List Goal :=
+  match t with
+  | Tactic.Tactic "t0" _ _ =>
+    [g1, g2]
+  | Tactic.Tactic "t1" _ _ => [g3]
+  | Tactic.Tactic "t2" _ _ => []
+  | Tactic.Tactic "t3" _ _ => []
+  | _ => []
+
+def getApplicableTactics (g : Goal) : List Tactic :=
+  match g with
+  | Goal.Goal "g0" _ _ => [t0, t1]
+  | Goal.Goal "g1" _ _ => [t2]
+  | Goal.Goal "g2" _ _ => [t3]
+  | Goal.Goal "g3" _ _ => []
+  | _ => []
+
+end Backend
+
+-- TODO: may delete Sizing section
+
+namespace Sizing
+open Backend
+
 @[simp]
 theorem size_of_list_tactic (x : Tactic) (l : List Tactic) (h : x ∈ l) : sizeOf x <= sizeOf l := by
   induction l <;> simp_all
@@ -119,36 +156,4 @@ theorem depth_decreasing_tactic
   apply List.mem_map_of_mem
   assumption
 
-open Lean
-
---TODO
-def t0 := Tactic.Tactic "t0" "split" []
-def t1 := Tactic.Tactic "t1" "id" []
-def t2 := Tactic.Tactic "t2" "exact P" []
-def t3 := Tactic.Tactic "t3" "exact Q" []
-def g0 := Goal.Goal "g0" "P /\\ Q" [t0, t1]
-def g1 := Goal.Goal "g1" "P" []
-def g2 := Goal.Goal "g2" "Q" []
-def g3 := Goal.Goal "g3" "P /\\ Q" []
-
--- TODO
-def getInitialState (_ : String) : Goal := g0
-
-def getSubgoals (t : Tactic) : List Goal :=
-  match t with
-  | Tactic.Tactic "t0" _ _ =>
-    [g1, g2]
-  | Tactic.Tactic "t1" _ _ => [g3]
-  | Tactic.Tactic "t2" _ _ => []
-  | Tactic.Tactic "t3" _ _ => []
-  | _ => []
-
-def getApplicableTactics (g : Goal) : List Tactic :=
-  match g with
-  | Goal.Goal "g0" _ _ => [t0, t1]
-  | Goal.Goal "g1" _ _ => [t2]
-  | Goal.Goal "g2" _ _ => [t3]
-  | Goal.Goal "g3" _ _ => []
-  | _ => []
-
-namespace Backend
+end Sizing
