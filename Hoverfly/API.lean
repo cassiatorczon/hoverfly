@@ -114,6 +114,12 @@ def getApplicableTactics (g : Goal) : RequestM (RequestTask (List Tactic)) :=
   let ts := tsB.map (fun t => backendTacticToAPITactic t)
   RequestM.pureTask $ pure $ ts
 
+--TODO
+@[server_rpc_method]
+def temporaryTest (_ : String): RequestM (RequestTask String) :=
+  RequestM.pureTask $ pure $ Backend.temporaryTest
+
+
 @[widget_module]
 def checkWidget : Widget.Module where
   javascript := include_str ".."/".lake"/"build"/"js"/"Hoverfly.js"

@@ -1,3 +1,8 @@
+namespace Internal
+
+
+end Internal
+
 namespace Backend
 
 mutual
@@ -39,6 +44,10 @@ def getApplicableTactics (g : Goal) : List Tactic :=
   | Goal.Goal "g2" _ _ => [t3]
   | Goal.Goal "g3" _ _ => []
   | _ => []
+
+-- TODO
+def temporaryTest : String :=
+  ""
 
 end Backend
 

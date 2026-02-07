@@ -179,6 +179,12 @@ function nearestCommonAncestorWithSelected(n: Node, id: ID):
 
 async function handleClick(root: Node, clicked: Node, rs: RpcSessionAtPos): Promise<Node> {
 
+  // TODO
+  if (true) {
+    const update = await temporaryTest(rs)
+    return root
+  }
+
   if (clicked.status === 'selected') {
     console.log("Node " + clicked.id + " was already selected.")
     // User has clicked the already-selected node. Do nothing.
@@ -348,6 +354,12 @@ async function getSubgoals(n: Node, rs: RpcSessionAtPos): Promise<Node> {
   const subgoals: APIGoal[] = await rs.call("getSubgoals", t)
   const tsxGoals = subgoals.map((g: APIGoal) => APIGoalToNode(g))
   return { ...n, children: tsxGoals }
+}
+
+// TODO
+async function temporaryTest(rs: RpcSessionAtPos): Promise<String> {
+  const s: String = await rs.call("temporaryTest", "")
+  return s
 }
 
 /* React */
