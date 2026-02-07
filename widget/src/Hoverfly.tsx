@@ -408,7 +408,7 @@ function Hoverfly(props: HoverflyProps) {
   const ec = useContext(EditorContext)
 
   useEffect(() => {
-    rs.call('API.getInitialState', "").then((st) => {
+    rs.call('API.getInitialState', { goals: props.goals }).then((st) => {
       const n = APIGoalToNode(st as APIGoal)
       const selectedN: Node = { ...n, status: 'selected' }
       setRoot(selectedN)

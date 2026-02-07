@@ -90,12 +90,16 @@ decreasing_by
 
 end
 
+structure GetInitialStateParams where
+  goals : Array Widget.InteractiveGoal
+  deriving RpcEncodable
+
 -- TODO arg
 @[server_rpc_method]
-def getInitialState (_ : String) : RequestM (RequestTask Goal) :=
+def getInitialState (_params : GetInitialStateParams) : RequestM (RequestTask Goal) :=
   -- TODO
-  RequestM.asTask $ pure $
-    backendGoalToAPIGoal (Backend.getInitialState "")
+  RequestM.asTask $ do
+    return backendGoalToAPIGoal (Backend.getInitialState "")
 
 @[server_rpc_method]
 def getSubgoals (t : Tactic) : RequestM (RequestTask (List Goal)) :=
@@ -129,9 +133,7 @@ elab stx:"myWidgetTactic" : tactic => do
   Widget.savePanelWidgetInfo checkWidget.javascriptHash
     (pure $ json% { tacticRange: $(tacticRange) }) stx
 
-#widget checkWidget
-
--- theorem foo : P ∧ Q -> P := by
---   myWidgetTactic
+theorem foo : P ∧ Q -> P := by
+  myWidgetTactic
 
 end API
