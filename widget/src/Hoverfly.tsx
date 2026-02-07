@@ -1,6 +1,6 @@
 import { Fragment, useState, useEffect, useContext } from 'react'
 import { useRpcSession, useAsync, mapRpcError, RpcSessionAtPos, EditorContext, PanelWidgetProps, EditorConnection, DocumentPosition } from '@leanprover/infoview';
-import { Position, TextDocumentEdit, TextEdit } from "vscode-languageserver-protocol";
+import { DocumentUri, Position, Range, TextDocumentEdit, TextDocumentIdentifier, TextEdit } from "vscode-languageserver-protocol";
 // import './App.css'
 
 type ID = string
@@ -388,14 +388,18 @@ function HoverflyTree({ root, onClick }: { root: Node, onClick: (n: Node) => Pro
   )
 }
 
-type HoverflyProps = PanelWidgetProps;
+type HoverflyProps = PanelWidgetProps & {
+  tacticRange: Range;
+}
 
-async function insertFoo(ec: EditorConnection, pos: DocumentPosition) {
+async function insertSkip(ec: EditorConnection, uri: DocumentUri, tacticRange: Range) {
+  // NOTE: We could use `insertText` instead here.
   await ec.api.applyEdit({
     documentChanges:
-      [TextDocumentEdit.create({ uri: pos.uri, version: null },
-        [TextEdit.insert(pos, "foo")])]
+      [TextDocumentEdit.create({ uri: uri, version: null },
+        [TextEdit.replace(tacticRange, `skip\n${" ".repeat(tacticRange.start.character)}myWidgetTactic`)])]
   })
+  await ec.revealPosition({ line: tacticRange.start.line + 1, character: tacticRange.end.character, uri: uri })
 }
 
 function Hoverfly(props: HoverflyProps) {
@@ -416,7 +420,7 @@ function Hoverfly(props: HoverflyProps) {
   if (root !== null) {
     const onClick = async (n: Node) => {
       console.log("Clicked " + n.id)
-      await insertFoo(ec, props.pos)
+      await insertSkip(ec, props.pos.uri, props.tacticRange)
       setRoot(await handleClick(root, n, rs))
     }
     return <><HoverflyTree root={root} onClick={onClick} /></>

@@ -123,9 +123,14 @@ def temporaryTest (_ : String): RequestM (RequestTask String) :=
 def checkWidget : Widget.Module where
   javascript := include_str ".."/".lake"/"build"/"js"/"Hoverfly.js"
 
+open scoped Json in
+elab stx:"myWidgetTactic" : tactic => do
+  let some tacticRange := (← getFileMap).lspRangeOfStx? stx | return
+  Widget.savePanelWidgetInfo checkWidget.javascriptHash
+    (pure $ json% { tacticRange: $(tacticRange) }) stx
+
 #widget checkWidget
 
--- TODO:
 -- theorem foo : P ∧ Q -> P := by
 --   myWidgetTactic
 
