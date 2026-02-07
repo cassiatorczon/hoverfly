@@ -1,5 +1,6 @@
-import { Fragment, useState, useEffect } from 'react'
-import { useRpcSession, useAsync, mapRpcError, RpcSessionAtPos } from '@leanprover/infoview';
+import { Fragment, useState, useEffect, useContext } from 'react'
+import { useRpcSession, useAsync, mapRpcError, RpcSessionAtPos, EditorContext, PanelWidgetProps, EditorConnection, DocumentPosition } from '@leanprover/infoview';
+import { Position, TextDocumentEdit, TextEdit } from "vscode-languageserver-protocol";
 // import './App.css'
 
 type ID = string
@@ -358,7 +359,7 @@ async function getSubgoals(n: Node, rs: RpcSessionAtPos): Promise<Node> {
 
 // TODO
 async function temporaryTest(rs: RpcSessionAtPos): Promise<String> {
-  const s: String = await rs.call("temporaryTest", "")
+  const s: String = await rs.call("API.temporaryTest", "")
   return s
 }
 
@@ -387,23 +388,35 @@ function HoverflyTree({ root, onClick }: { root: Node, onClick: (n: Node) => Pro
   )
 }
 
-function Hoverfly() {
+type HoverflyProps = PanelWidgetProps;
+
+async function insertFoo(ec: EditorConnection, pos: DocumentPosition) {
+  await ec.api.applyEdit({
+    documentChanges:
+      [TextDocumentEdit.create({ uri: pos.uri, version: null },
+        [TextEdit.insert(pos, "foo")])]
+  })
+}
+
+function Hoverfly(props: HoverflyProps) {
   const [root, setRoot] = useState<Node | null>(null)
   const rs = useRpcSession()
+  const ec = useContext(EditorContext)
 
   useEffect(() => {
-    rs.call('getInitialState', "").then((st) => {
+    rs.call('API.getInitialState', "").then((st) => {
       const n = APIGoalToNode(st as APIGoal)
       const selectedN: Node = { ...n, status: 'selected' }
       setRoot(selectedN)
-    }
-    )
-
+    }).catch((reason) => {
+      console.error(reason)
+    })
   }, [rs])
 
   if (root !== null) {
     const onClick = async (n: Node) => {
       console.log("Clicked " + n.id)
+      await insertFoo(ec, props.pos)
       setRoot(await handleClick(root, n, rs))
     }
     return <><HoverflyTree root={root} onClick={onClick} /></>

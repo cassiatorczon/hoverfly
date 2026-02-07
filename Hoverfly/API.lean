@@ -95,7 +95,7 @@ end
 def getInitialState (_ : String) : RequestM (RequestTask Goal) :=
   -- TODO
   RequestM.asTask $ pure $
-   backendGoalToAPIGoal (Backend.getInitialState "")
+    backendGoalToAPIGoal (Backend.getInitialState "")
 
 @[server_rpc_method]
 def getSubgoals (t : Tactic) : RequestM (RequestTask (List Goal)) :=
@@ -119,12 +119,14 @@ def getApplicableTactics (g : Goal) : RequestM (RequestTask (List Tactic)) :=
 def temporaryTest (_ : String): RequestM (RequestTask String) :=
   RequestM.pureTask $ pure $ Backend.temporaryTest
 
-
 @[widget_module]
 def checkWidget : Widget.Module where
   javascript := include_str ".."/".lake"/"build"/"js"/"Hoverfly.js"
 
 #widget checkWidget
 
+-- TODO:
+-- theorem foo : P ∧ Q -> P := by
+--   myWidgetTactic
 
-namespace API
+end API
