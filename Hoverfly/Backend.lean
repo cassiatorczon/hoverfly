@@ -1,5 +1,7 @@
 namespace Internal
 
+-- TODO
+def temporaryTest : String := ""
 
 end Internal
 
@@ -47,7 +49,7 @@ def getApplicableTactics (g : Goal) : List Tactic :=
 
 -- TODO
 def temporaryTest : String :=
-  ""
+  Internal.temporaryTest
 
 end Backend
 
