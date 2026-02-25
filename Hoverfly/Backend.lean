@@ -11,7 +11,7 @@ mutual
 
 inductive Goal : Type where
 | Goal (id : String) (data : String) (children : List Tactic) : Goal
-
+  --(goalRange : Range)
 inductive Tactic : Type where
 | Tactic (id : String) (data : String) (children : List Goal) : Tactic
 
@@ -168,3 +168,15 @@ theorem depth_decreasing_tactic
   assumption
 
 end Sizing
+
+
+theorem foo (x : Int) :
+  match x with
+  | 0 => False /\ False
+  | _ => False /\ False := by
+  split
+  case h_1 =>
+    apply And.intro
+    case left => sorry
+    case right => sorry
+  case h_2 => sorry

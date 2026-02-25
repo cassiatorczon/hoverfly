@@ -134,6 +134,10 @@ elab stx:"myWidgetTactic" : tactic => do
     (pure $ json% { tacticRange: $(tacticRange) }) stx
 
 theorem foo : P ∧ Q -> P := by
+  skip
+  skip
+  skip
   myWidgetTactic
+  sorry
 
 end API

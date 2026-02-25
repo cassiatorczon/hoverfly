@@ -402,6 +402,17 @@ async function insertSkip(ec: EditorConnection, uri: DocumentUri, tacticRange: R
   await ec.revealPosition({ line: tacticRange.start.line + 1, character: tacticRange.end.character, uri: uri })
 }
 
+
+async function insertTactic(ec: EditorConnection, uri: DocumentUri, tacticRange: Range) {
+  // TODO: could also use the case names instead of bullets
+  await ec.api.applyEdit({
+    documentChanges:
+      [TextDocumentEdit.create({ uri: uri, version: null },
+        [TextEdit.replace(tacticRange, `skip\n${" ".repeat(tacticRange.start.character)}myWidgetTactic`)])]
+  })
+  await ec.revealPosition({ line: tacticRange.start.line + 1, character: tacticRange.end.character, uri: uri })
+}
+
 function Hoverfly(props: HoverflyProps) {
   const [root, setRoot] = useState<Node | null>(null)
   const rs = useRpcSession()
