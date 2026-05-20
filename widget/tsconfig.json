@@ -9,6 +9,7 @@
     "moduleResolution": "bundler",
     /* Emit code */
     "sourceMap": false,
+    "rootDir": "./src/",
     "outDir": "./dist/",
     /* Emit declarations */
     "declaration": true,
