@@ -1,18 +1,17 @@
 import ProofWidgets
 import Hoverfly.Backend
+import Hoverfly.Json
 
 namespace API
 open Lean ProofWidgets
 
-instance : ToJson String := inferInstanceAs (ToJson String)
-instance : FromJson String := inferInstanceAs (FromJson String)
-
-instance : ToJson String := inferInstanceAs (ToJson String)
-instance : FromJson String := inferInstanceAs (FromJson String)
+def GoalId := MVarId
+deriving ToJson, FromJson
 
 mutual
 structure Goal where
-  id : String -- TODO type
+  id : GoalId -- TODO type
+  -- state: Lean.Elab.Tactic.SavedState
   data : String -- TODO type
   children : List Tactic
   deriving ToJson, FromJson
@@ -67,9 +66,7 @@ decreasing_by
   cases g
   simp_all
   rw [Nat.add_assoc]
-  rw [Nat.add_assoc]
   rw [Nat.lt_one_add_iff]
-  rw [← Nat.add_assoc]
   apply Nat.le_add_left_of_le
   apply size_of_list_tactic
   assumption
@@ -101,6 +98,20 @@ def getInitialState (_params : GetInitialStateParams) : RequestM (RequestTask Go
   RequestM.asTask $ do
     return backendGoalToAPIGoal (Backend.getInitialState "")
 
+open Server RequestM in
+def getApplicableTactics'
+  (pos : Lsp.Position) -- root position
+  (root : Goal)
+  (current : Goal)
+  : RequestM (RequestTask Unit) := do
+  withWaitFindSnapAtPos pos fun snap => do
+    -- Get the elaboration state
+    RequestM.runTermElabM snap do
+      -- Run a tactic
+      let result : List Lean.MVarId <- Lean.Elab.Tactic.run root.id do
+        Lean.Elab.Tactic.evalTactic (← `(tactic | skip))
+      return ()
+
 @[server_rpc_method]
 def getSubgoals (t : Tactic) : RequestM (RequestTask (List Goal)) :=
   -- TODO
@@ -108,7 +119,6 @@ def getSubgoals (t : Tactic) : RequestM (RequestTask (List Goal)) :=
   let gsB := Backend.getSubgoals tB
   let gs := gsB.map (fun g => backendGoalToAPIGoal g)
   RequestM.pureTask $ pure $ gs
-
 
 @[server_rpc_method]
 def getApplicableTactics (g : Goal) : RequestM (RequestTask (List Tactic)) :=
@@ -133,8 +143,17 @@ elab stx:"myWidgetTactic" : tactic => do
   Widget.savePanelWidgetInfo checkWidget.javascriptHash
     (pure $ json% { tacticRange: $(tacticRange) }) stx
 
-theorem foo : P ∧ Q -> P := by
-  skip
+
+
+-- open Lean.Elab.Tactic in
+-- def myTactic : Tactic := λ stx => do
+--   -- let env <- getEnv
+--   let g <- Elab.Tactic.getMainGoal -- means myTactic must
+--   g.withContext do
+
+--   return
+
+theorem foobar : P ∧ Q -> P := by
   skip
   skip
   myWidgetTactic
