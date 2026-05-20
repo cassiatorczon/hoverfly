@@ -4,12 +4,6 @@ import ProofWidgets
 namespace API
 open Lean ProofWidgets
 
-instance : ToJson String := inferInstanceAs (ToJson String)
-instance : FromJson String := inferInstanceAs (FromJson String)
-
-instance : ToJson MVarId := inferInstanceAs (ToJson MVarId)
-instance : FromJson MVarId := inferInstanceAs (FromJson MVarId)
-
 def GoalId := MVarId
 deriving ToJson, FromJson
 
