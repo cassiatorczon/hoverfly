@@ -1,3 +1,4 @@
+import Lean.Expr
 namespace Internal
 
 -- TODO
@@ -6,11 +7,14 @@ def temporaryTest : String := ""
 end Internal
 
 namespace Backend
+open Lean
+
+def GoalId := MVarId
 
 mutual
 
 inductive Goal : Type where
-| Goal (id : String) (data : String) (children : List Tactic) : Goal
+| Goal (id : MVarId) (data : String) (children : List Tactic) : Goal
   --(goalRange : Range)
 inductive Tactic : Type where
 | Tactic (id : String) (data : String) (children : List Goal) : Tactic
@@ -22,10 +26,10 @@ def t0 := Tactic.Tactic "t0" "split" []
 def t1 := Tactic.Tactic "t1" "id" []
 def t2 := Tactic.Tactic "t2" "exact P" []
 def t3 := Tactic.Tactic "t3" "exact Q" []
-def g0 := Goal.Goal "g0" "P /\\ Q" [t0, t1]
-def g1 := Goal.Goal "g1" "P" []
-def g2 := Goal.Goal "g2" "Q" []
-def g3 := Goal.Goal "g3" "P /\\ Q" []
+def g0 := Goal.Goal {name:=Lean.Name.mkSimple "g0"} "P /\\ Q" [t0, t1]
+def g1 := Goal.Goal {name:=Lean.Name.mkSimple "g1"} "P" []
+def g2 := Goal.Goal {name:=Lean.Name.mkSimple "g2"} "Q" []
+def g3 := Goal.Goal {name:=Lean.Name.mkSimple "g3"} "P /\\ Q" []
 
 -- TODO
 def getInitialState (_ : String) : Goal := g0
@@ -41,15 +45,22 @@ def getSubgoals (t : Tactic) : List Goal :=
 
 def getApplicableTactics (g : Goal) : List Tactic :=
   match g with
-  | Goal.Goal "g0" _ _ => [t0, t1]
-  | Goal.Goal "g1" _ _ => [t2]
-  | Goal.Goal "g2" _ _ => [t3]
-  | Goal.Goal "g3" _ _ => []
-  | _ => []
+  | Goal.Goal n _ _ =>
+    if n.name.eqStr "g0"
+    then [t0,t1]
+    else if n.name.eqStr "g1"
+      then [t2]
+      else if n.name.eqStr "g2"
+        then [t3]
+        else if n.name.eqStr "g3"
+        then []
+        else []
 
 -- TODO
 def temporaryTest : String :=
   Internal.temporaryTest
+
+
 
 end Backend
 
@@ -125,7 +136,7 @@ end
 
 @[simp]
 theorem depth_decreasing_goal
-  (id : String)
+  (id : GoalId)
   (data : String)
   (t : Tactic)
   (ts : List Tactic) :
