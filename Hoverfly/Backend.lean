@@ -152,7 +152,7 @@ structure GetApplicableTacticsParams where
   pos : Lsp.Position
   deriving RpcEncodable
 
--- @[server_rpc_method]
+@[server_rpc_method]
 def getApplicableTactics
   (_params : GetApplicableTacticsParams)
   : RequestM (RequestTask ((List APINode) × WithRpcRef State)) :=
