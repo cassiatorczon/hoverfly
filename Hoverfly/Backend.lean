@@ -1,7 +1,7 @@
 import ProofWidgets
 
-namespace API
-open Lean ProofWidgets
+namespace Backend
+open Lean ProofWidgets Server
 
 deriving instance TypeName for Nat
 deriving instance TypeName for Elab.Term.SavedState
@@ -22,34 +22,19 @@ deriving instance FromJson for SourceInfo
 deriving instance FromJson for Syntax.Preresolved
 deriving instance FromJson for Syntax
 
-mutual
-structure Goal where
-  stateId : Nat
-  goalId : MVarId -- TODO could go in map
-  display : String -- todo could go in map on the other side
-  children : List Tactic
+def StateId := Nat
+  deriving OfNat, BEq, Hashable, ToJson, FromJson, HAdd
+
+structure State where
+  nodeCounter : StateId := 0
+  goalMap : Std.HashMap StateId (MVarId × Elab.Term.SavedState) := ∅
+  tacticMap : Std.HashMap StateId (Syntax × StateId) := ∅
+  deriving TypeName
+
+structure APINode where
+  id : StateId
+  display : String
   deriving ToJson, FromJson
-
-structure Tactic where
-  stateId : Nat -- gets this from parent
-  tacticName : Syntax -- TODO could go in map
-  parentMVar : MVarId -- could get this from map if we put goalId there
-  display : String -- todo could go in map on other side
-  children : List Goal
-  deriving ToJson, FromJson
-end
-
-instance : Server.RpcEncodable Goal where
-  rpcEncode goal := pure (toJson goal)
-  rpcDecode json := fromJson? json |>.mapError (·)
-
-instance : Server.RpcEncodable (List Goal) where
-  rpcEncode goals := pure (toJson goals)
-  rpcDecode json := fromJson? json |>.mapError (·)
-
-instance : Server.RpcEncodable Tactic where
-  rpcEncode tactic := pure (toJson tactic)
-  rpcDecode json := fromJson? json |>.mapError (·)
 
 deriving instance Server.RpcEncodable for Nat
 
@@ -69,7 +54,8 @@ open Lean ProofWidgets Server
 
 
 structure GetInitialStateParams where
-  goals : Array Widget.InteractiveGoal --TODO
+  -- goals : Array Widget.InteractiveGoal --TODO
+  goal : Widget.InteractiveGoal
   pos : Lsp.Position --TODO
   deriving RpcEncodable
 
@@ -80,67 +66,128 @@ Stores a proof state server-side and returns a reference to it.
 @[server_rpc_method]
 def getInitialState
   (_params : GetInitialStateParams)
-  : RequestM (RequestTask (Goal × WithRpcRef ((Std.HashMap Nat Elab.Term.SavedState) × Nat))) :=
+  : RequestM (RequestTask (APINode × WithRpcRef State)) :=
   RequestM.withWaitFindSnapAtPos _params.pos fun snap => do
     RequestM.runTermElabM snap do
-      let initialGoal : Goal := --TODO
-        {stateId:=0, goalId:= MVarId.mk Name.anonymous, display := "P /\\ Q", children := []} --TODO
-      let initialProofState ← liftM (saveState : Lean.Elab.TermElabM _)
-      let initialMap := Std.HashMap.ofList [(initialGoal.stateId, initialProofState)]
-      let ref ← WithRpcRef.mk (initialMap, (1 : Nat))
-      return (initialGoal, ref)
+
+      -- get root goal API info
+      let display : String := toString _params.goal.pretty
+      let rootGoal : APINode := {id := 0, display := display}
+
+      -- get proof state and mvarId at root goal
+      let rootProofState ← liftM (saveState : Lean.Elab.TermElabM _)
+      let rootMVarId := _params.goal.mvarId
+
+      -- initialize map of goal ids to MVarIds and States
+      let initialGoalMap := Std.HashMap.ofList [
+        (rootGoal.id, (rootMVarId, rootProofState))
+        ]
+
+      -- initialize state
+      let initialState : State := {
+          nodeCounter := rootGoal.id + 1,
+          goalMap := initialGoalMap,
+          tacticMap := ∅
+        }
+
+      let ref ← WithRpcRef.mk initialState
+      return (rootGoal, ref)
 
 
 structure GetSubgoalsParams where
-  t : Tactic
-  statesRef : WithRpcRef ((Std.HashMap Nat Elab.Term.SavedState) × Nat)
+  id : StateId
+  stateRef : WithRpcRef State
   pos : Lsp.Position
   deriving RpcEncodable
 
 @[server_rpc_method]
 def getSubgoals
   (_params : GetSubgoalsParams)
-  : RequestM (RequestTask ((List Goal) × (WithRpcRef ((Std.HashMap Nat Elab.Term.SavedState) × Nat)))) :=
+  : RequestM (RequestTask ((List APINode) × WithRpcRef State)) :=
   RequestM.withWaitFindSnapAtPos _params.pos fun snap => do
     RequestM.runTermElabM snap do
-      let t := _params.t
-      let (stateMap, counter) := _params.statesRef.val
-      match stateMap.get? t.stateId with
-      | some proofState =>
-        liftM (restoreState proofState : Lean.Elab.TermElabM Unit)
-        let result : List Lean.MVarId <- Lean.Elab.Tactic.run t.parentMVar do
-          Lean.Elab.Tactic.evalTactic t.tacticName
-        let newProofState ← liftM (saveState : Lean.Elab.TermElabM Lean.Elab.Term.SavedState)
-        let comb p mvarId := match p with
-          | (gs, c) =>
-            let g : Goal := {stateId := c, goalId := mvarId, display := "todo", children := []}
-            (g :: gs, c + 1)
-        let (goals, newCounter) := result.foldl comb ([], counter)
-        let newStateMap
-          := goals.foldl (fun map goal => map.insert goal.stateId newProofState) stateMap
-        let newState ← WithRpcRef.mk (newStateMap, newCounter)
-        pure (goals, newState)
-      | _ => pure ([], _params.statesRef) -- TODO: error behavior
+      -- get counter and maps
+      let {nodeCounter, goalMap, tacticMap}
+        := _params.stateRef.val
+
+      -- get syntax and id of parent goal for tactic
+      match tacticMap.get? _params.id with
+      | some (stx, parentId) =>
+
+        -- get mvarId and proof state for parent goal of tactic
+        match goalMap.get? parentId with
+        | some (mvarId, proofState) =>
+
+          -- restore proof state for parent goal of tactic
+          liftM (restoreState proofState : Lean.Elab.TermElabM Unit)
+
+          -- run tactic
+          let result : List Lean.MVarId <- Lean.Elab.Tactic.run mvarId do
+            Lean.Elab.Tactic.evalTactic stx
+
+          -- add each new goal to map and return nodes and updated counter
+          let newProofState ← liftM (saveState : Lean.Elab.TermElabM Lean.Elab.Term.SavedState)
+          let f t mvarId := match t with
+            | (nodes, tempGoalMap, c) =>
+              let apiNode : APINode := {id := c, display :="todo"}
+              let goalInfo := (mvarId, newProofState)
+              let newMap := tempGoalMap.insert c goalInfo
+              (apiNode :: nodes, newMap, c + 1)
+          let (goals, newGoalMap, newCounter) := result.foldl f ([], goalMap, nodeCounter)
+
+          -- update state
+          let newState ← WithRpcRef.mk {
+              nodeCounter := newCounter
+              goalMap := newGoalMap,
+              tacticMap := tacticMap
+            }
+
+          pure (goals, newState)
+        | _ => pure ([], _params.stateRef) -- TODO: error behavior
+      | _ => pure ([], _params.stateRef) -- TODO: error behavior
 
 structure GetApplicableTacticsParams where
-  g : Goal
-  statesRef : WithRpcRef (Std.HashMap Nat Elab.Term.SavedState)
+  id : StateId
+  stateRef : WithRpcRef State
   pos : Lsp.Position
   deriving RpcEncodable
 
-@[server_rpc_method]
+-- @[server_rpc_method]
 def getApplicableTactics
   (_params : GetApplicableTacticsParams)
-  : RequestM (RequestTask (List Tactic)) :=
+  : RequestM (RequestTask ((List APINode) × WithRpcRef State)) :=
   RequestM.withWaitFindSnapAtPos _params.pos fun snap => do
     RequestM.runTermElabM snap do
-      let ts := by sorry
-      pure $ ts
+      -- get counter and maps
+      let {nodeCounter, goalMap, tacticMap}
+        := _params.stateRef.val
 
--- --TODO
--- @[server_rpc_method]
--- def temporaryTest (_ : String): RequestM (RequestTask String) :=
---   RequestM.pureTask $ pure $ Backend.temporaryTest
+      -- get mvarId and proof state for goal (TODO: necessary?)
+      match goalMap.get? _params.id with
+      | some (mvarId, proofState) =>
+
+        -- get all tactics
+        let ts : List Syntax := by sorry
+
+        -- add each new tactic to map and return nodes and updated counter
+        let f t stx := match t with
+          | (nodes, tempTacticMap, c) =>
+            let apiNode : APINode := {id := c, display :="todo"}
+            let tacticInfo := (stx, _params.id)
+            let newMap := tempTacticMap.insert c tacticInfo
+            (apiNode :: nodes, newMap, c + 1)
+        let (tactics, newTacticMap, newCounter) := ts.foldl f ([], tacticMap, nodeCounter)
+
+        -- update state
+        let newState ← WithRpcRef.mk {
+            nodeCounter := newCounter
+            goalMap := goalMap,
+            tacticMap := newTacticMap
+          }
+
+        pure (tactics, newState)
+      | _ => pure ([], _params.stateRef) -- TODO: error behavior
+
 
 @[widget_module]
 def checkWidget : Widget.Module where
@@ -168,4 +215,4 @@ def checkWidget : Widget.Module where
 --   myWidgetTactic
 --   sorry
 
-end API
+end Backend
