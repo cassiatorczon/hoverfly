@@ -25,17 +25,17 @@ deriving instance FromJson for Syntax
 
 mutual
 structure Goal where
-  stateId : Nat -- TODO type
-  goalId : MVarId
-  display : String
+  stateId : Nat
+  goalId : MVarId -- TODO could go in map
+  display : String -- todo could go in map on the other side
   children : List Tactic
   deriving ToJson, FromJson
 
 structure Tactic where
-  stateId : Nat -- TODO type
-  tacticName : Syntax
-  parentMVar : MVarId
-  display : String
+  stateId : Nat -- gets this from parent
+  tacticName : Syntax -- TODO could go in map
+  parentMVar : MVarId -- could get this from map if we put goalId there
+  display : String -- todo could go in map on other side
   children : List Goal
   deriving ToJson, FromJson
 end
@@ -123,8 +123,8 @@ open Lean ProofWidgets Server
 -- end
 
 structure GetInitialStateParams where
-  goals : Array Widget.InteractiveGoal
-  pos : Lsp.Position
+  goals : Array Widget.InteractiveGoal --TODO
+  pos : Lsp.Position --TODO
   deriving RpcEncodable
 
 /--
