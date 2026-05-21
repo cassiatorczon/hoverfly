@@ -1,193 +1,171 @@
-import Lean.Expr
-namespace Internal
+import ProofWidgets
 
--- TODO
-def temporaryTest : String := ""
+namespace API
+open Lean ProofWidgets
 
-end Internal
+deriving instance TypeName for Nat
+deriving instance TypeName for Elab.Term.SavedState
+instance [BEq α] [Hashable α] [TypeName α] [TypeName β]
+  : TypeName (α × β) := by sorry
+instance [BEq α] [Hashable α] [TypeName α] [TypeName β]
+  : TypeName (Std.HashMap α β) := by sorry
 
-namespace Backend
-open Lean
+deriving instance ToJson for String.Pos.Raw
+deriving instance ToJson for Substring.Raw
+deriving instance ToJson for SourceInfo
+deriving instance ToJson for Syntax.Preresolved
+deriving instance ToJson for Syntax
 
-def GoalId := MVarId
-
-mutual
-
-inductive Goal : Type where
-| Goal (id : MVarId) (data : String) (children : List Tactic) : Goal
-  --(goalRange : Range)
-inductive Tactic : Type where
-| Tactic (id : String) (data : String) (children : List Goal) : Tactic
-
-end
-
---TODO
-def t0 := Tactic.Tactic "t0" "split" []
-def t1 := Tactic.Tactic "t1" "id" []
-def t2 := Tactic.Tactic "t2" "exact P" []
-def t3 := Tactic.Tactic "t3" "exact Q" []
-def g0 := Goal.Goal {name:=Lean.Name.mkSimple "g0"} "P /\\ Q" [t0, t1]
-def g1 := Goal.Goal {name:=Lean.Name.mkSimple "g1"} "P" []
-def g2 := Goal.Goal {name:=Lean.Name.mkSimple "g2"} "Q" []
-def g3 := Goal.Goal {name:=Lean.Name.mkSimple "g3"} "P /\\ Q" []
-
--- TODO
-def getInitialState (_ : String) : Goal := g0
-
-def getSubgoals (t : Tactic) : List Goal :=
-  match t with
-  | Tactic.Tactic "t0" _ _ =>
-    [g1, g2]
-  | Tactic.Tactic "t1" _ _ => [g3]
-  | Tactic.Tactic "t2" _ _ => []
-  | Tactic.Tactic "t3" _ _ => []
-  | _ => []
-
-def getApplicableTactics (g : Goal) : List Tactic :=
-  match g with
-  | Goal.Goal n _ _ =>
-    if n.name.eqStr "g0"
-    then [t0,t1]
-    else if n.name.eqStr "g1"
-      then [t2]
-      else if n.name.eqStr "g2"
-        then [t3]
-        else if n.name.eqStr "g3"
-        then []
-        else []
-
--- TODO
-def temporaryTest : String :=
-  Internal.temporaryTest
-
-
-
-end Backend
-
--- TODO: may delete Sizing section
-
-namespace Sizing
-open Backend
-
-@[simp]
-theorem size_of_list_tactic (x : Tactic) (l : List Tactic) (h : x ∈ l) : sizeOf x <= sizeOf l := by
-  induction l <;> simp_all
-  cases h <;> simp_all <;> omega
-
-@[simp]
-theorem size_of_list_goal (x : Goal) (l : List Goal) (h : x ∈ l) : sizeOf x <= sizeOf l := by
-  induction l <;> simp_all
-  cases h <;> simp_all <;> omega
+deriving instance FromJson for String.Pos.Raw
+deriving instance FromJson for Substring.Raw
+deriving instance FromJson for SourceInfo
+deriving instance FromJson for Syntax.Preresolved
+deriving instance FromJson for Syntax
 
 mutual
+structure Goal where
+  stateId : Nat
+  goalId : MVarId -- TODO could go in map
+  display : String -- todo could go in map on the other side
+  children : List Tactic
+  deriving ToJson, FromJson
 
-def sizeGoal (g : Goal) : Nat :=
-  match g with
-  | Goal.Goal _ _ cs =>
-      cs.foldl (fun acc t => acc + sizeTactic t) 1
-termination_by sizeOf g
-decreasing_by
-  simp_all
-  have ht : sizeOf t <= sizeOf cs := by simp_all
-  omega
-
-def sizeTactic (t : Tactic) : Nat :=
-  match t with
-  | Tactic.Tactic _ _ cs =>
-      cs.foldl (fun acc g => acc + sizeGoal g) 1
-termination_by sizeOf t
-decreasing_by
-  simp_all
-  have hg : sizeOf g <= sizeOf cs := by simp_all
-  omega
-
+structure Tactic where
+  stateId : Nat -- gets this from parent
+  tacticName : Syntax -- TODO could go in map
+  parentMVar : MVarId -- could get this from map if we put goalId there
+  display : String -- todo could go in map on other side
+  children : List Goal
+  deriving ToJson, FromJson
 end
 
-mutual
+instance : Server.RpcEncodable Goal where
+  rpcEncode goal := pure (toJson goal)
+  rpcDecode json := fromJson? json |>.mapError (·)
 
-@[simp]
-def depthGoal (g : Goal) : Nat :=
-  match g with
-  | Goal.Goal _ _ cs =>
-      let depths := cs.map (fun t => depthTactic t)
-      match h : depths with
-      | [] => 1
-      | t :: ts => 1 + (List.max depths (by simp_all))
-termination_by sizeOf g
-decreasing_by
-  simp_all
-  have ht : sizeOf t <= sizeOf cs := by simp_all
-  omega
+instance : Server.RpcEncodable (List Goal) where
+  rpcEncode goals := pure (toJson goals)
+  rpcDecode json := fromJson? json |>.mapError (·)
 
-@[simp]
-def depthTactic (t : Tactic) : Nat :=
-  match t with
-  | Tactic.Tactic _ _ cs =>
-      let depths := cs.map (fun g => depthGoal g)
-      match h : depths with
-      | [] => 1
-      | g :: gs => 1 + (List.max depths (by simp_all))
-termination_by sizeOf t
-decreasing_by
-  simp_all
-  have hg : sizeOf g <= sizeOf cs := by simp_all
-  omega
-end
+instance : Server.RpcEncodable Tactic where
+  rpcEncode tactic := pure (toJson tactic)
+  rpcDecode json := fromJson? json |>.mapError (·)
 
-@[simp]
-theorem depth_decreasing_goal
-  (id : GoalId)
-  (data : String)
-  (t : Tactic)
-  (ts : List Tactic) :
-  t ∈ ts →
-  depthTactic t < depthGoal (Goal.Goal id data ts) := by
-  intros h
-  unfold depthGoal
-  cases ts <;> simp_all
-  conv =>
-    rhs
-    rhs
-    simp [← List.map_cons]
-  rw [Nat.add_comm]
-  rw [← List.mem_cons] at h
-  apply Nat.lt_add_one_of_le
-  apply List.le_max_of_mem
-  apply List.mem_map_of_mem
-  assumption
+deriving instance Server.RpcEncodable for Nat
 
-@[simp]
-theorem depth_decreasing_tactic
-  (id : String)
-  (data : String)
-  (g : Goal)
-  (gs  : List Goal) :
-  g ∈ gs  →
-  depthGoal g < depthTactic (Tactic.Tactic id data gs) := by
-  intros h
-  unfold depthTactic
-  cases gs  <;> simp_all
-  conv =>
-    rhs
-    rhs
-    simp [← List.map_cons]
-  rw [Nat.add_comm]
-  rw [← List.mem_cons] at h
-  apply Nat.lt_add_one_of_le
-  apply List.le_max_of_mem
-  apply List.mem_map_of_mem
-  assumption
+open Server in
+instance [BEq α] [Hashable α] [RpcEncodable α] [RpcEncodable β]
+  : RpcEncodable (Std.HashMap α β) := by sorry
 
-end Sizing
+open Server in
+instance [BEq α] [Hashable α] [RpcEncodable α] [RpcEncodable β]
+  : RpcEncodable (α × β) := by sorry
+
+-- it could synthesize this before I added × Nat :(
+open Server in
+instance : RpcEncodable (WithRpcRef ((Std.HashMap Nat Elab.Term.SavedState) × Nat)) := by sorry
+
+open Lean ProofWidgets Server
 
 
-theorem foo (x : Int) :
-  match x with
-  | 0 => False /\ False
-  | _ => False /\ False := by
-  split
-  case h_1 =>
-    apply And.intro
-    case left => sorry
-    case right => sorry
-  case h_2 => sorry
+structure GetInitialStateParams where
+  goals : Array Widget.InteractiveGoal --TODO
+  pos : Lsp.Position --TODO
+  deriving RpcEncodable
+
+/--
+Gets initial goal state.
+Stores a proof state server-side and returns a reference to it.
+-/
+@[server_rpc_method]
+def getInitialState
+  (_params : GetInitialStateParams)
+  : RequestM (RequestTask (Goal × WithRpcRef ((Std.HashMap Nat Elab.Term.SavedState) × Nat))) :=
+  RequestM.withWaitFindSnapAtPos _params.pos fun snap => do
+    RequestM.runTermElabM snap do
+      let initialGoal : Goal := --TODO
+        {stateId:=0, goalId:= MVarId.mk Name.anonymous, display := "P /\\ Q", children := []} --TODO
+      let initialProofState ← liftM (saveState : Lean.Elab.TermElabM _)
+      let initialMap := Std.HashMap.ofList [(initialGoal.stateId, initialProofState)]
+      let ref ← WithRpcRef.mk (initialMap, (1 : Nat))
+      return (initialGoal, ref)
+
+
+structure GetSubgoalsParams where
+  t : Tactic
+  statesRef : WithRpcRef ((Std.HashMap Nat Elab.Term.SavedState) × Nat)
+  pos : Lsp.Position
+  deriving RpcEncodable
+
+@[server_rpc_method]
+def getSubgoals
+  (_params : GetSubgoalsParams)
+  : RequestM (RequestTask ((List Goal) × (WithRpcRef ((Std.HashMap Nat Elab.Term.SavedState) × Nat)))) :=
+  RequestM.withWaitFindSnapAtPos _params.pos fun snap => do
+    RequestM.runTermElabM snap do
+      let t := _params.t
+      let (stateMap, counter) := _params.statesRef.val
+      match stateMap.get? t.stateId with
+      | some proofState =>
+        liftM (restoreState proofState : Lean.Elab.TermElabM Unit)
+        let result : List Lean.MVarId <- Lean.Elab.Tactic.run t.parentMVar do
+          Lean.Elab.Tactic.evalTactic t.tacticName
+        let newProofState ← liftM (saveState : Lean.Elab.TermElabM Lean.Elab.Term.SavedState)
+        let comb p mvarId := match p with
+          | (gs, c) =>
+            let g : Goal := {stateId := c, goalId := mvarId, display := "todo", children := []}
+            (g :: gs, c + 1)
+        let (goals, newCounter) := result.foldl comb ([], counter)
+        let newStateMap
+          := goals.foldl (fun map goal => map.insert goal.stateId newProofState) stateMap
+        let newState ← WithRpcRef.mk (newStateMap, newCounter)
+        pure (goals, newState)
+      | _ => pure ([], _params.statesRef) -- TODO: error behavior
+
+structure GetApplicableTacticsParams where
+  g : Goal
+  statesRef : WithRpcRef (Std.HashMap Nat Elab.Term.SavedState)
+  pos : Lsp.Position
+  deriving RpcEncodable
+
+@[server_rpc_method]
+def getApplicableTactics
+  (_params : GetApplicableTacticsParams)
+  : RequestM (RequestTask (List Tactic)) :=
+  RequestM.withWaitFindSnapAtPos _params.pos fun snap => do
+    RequestM.runTermElabM snap do
+      let ts := by sorry
+      pure $ ts
+
+-- --TODO
+-- @[server_rpc_method]
+-- def temporaryTest (_ : String): RequestM (RequestTask String) :=
+--   RequestM.pureTask $ pure $ Backend.temporaryTest
+
+@[widget_module]
+def checkWidget : Widget.Module where
+  javascript := include_str ".."/".lake"/"build"/"js"/"Hoverfly.js"
+
+-- open scoped Json in
+-- elab stx:"myWidgetTactic" : tactic => do
+--   let some tacticRange := (← getFileMap).lspRangeOfStx? stx | return
+--   Widget.savePanelWidgetInfo checkWidget.javascriptHash
+--     (pure $ json% { tacticRange: $(tacticRange) }) stx
+
+
+
+-- open Lean.Elab.Tactic in
+-- def myTactic : Tactic := λ stx => do
+--   -- let env <- getEnv
+--   let g <- Elab.Tactic.getMainGoal -- means myTactic must
+--   g.withContext do
+
+-- --   return
+
+-- theorem foobar : P ∧ Q -> P := by
+--   skip
+--   skip
+--   myWidgetTactic
+--   sorry
+
+end API
