@@ -178,13 +178,7 @@ function nearestCommonAncestorWithSelected(n: Node, id: ID):
 
 /* Handler */
 
-async function handleClick(root: Node, clicked: Node, rs: RpcSessionAtPos): Promise<Node> {
-
-  // TODO
-  if (true) {
-    const update = await temporaryTest(rs)
-    return root
-  }
+async function handleClick(root: Node, apiData: APIData, clicked: Node, rs: RpcSessionAtPos): Promise<Node> {
 
   if (clicked.status === 'selected') {
     console.log("Node " + clicked.id + " was already selected.")
@@ -236,8 +230,8 @@ async function handleClick(root: Node, clicked: Node, rs: RpcSessionAtPos): Prom
 
       const update = async (n: Node) => n.id === clicked.id
         ? n.kind === 'goal'
-          ? { ...await getApplicableTactics(n, rs), explored: true }
-          : await getSubgoals(n, rs)
+          ? { ...await getApplicableTactics(n, apiData, rs), explored: true }
+          : await getSubgoals(n, apiData, rs)
         : n
       return updateNodes(await clickedUpdated, update, breakAfter)
     }
@@ -273,13 +267,15 @@ function assert(p: boolean, e: string): void {
 
 /* External */
 
+type APIData = number //TODO
+
 type APINode = {
   id: number
   display: string
 }
 
 
-function APIGoalToNode(n: APINode): Node {
+function APINodeToNode(n: APINode): Node {
   return {
     kind: 'goal',
     id: n.id,
@@ -293,41 +289,28 @@ function APIGoalToNode(n: APINode): Node {
   }
 }
 
-function nodeToAPINode(g: Node): APINode {
-  return {
-    id: g.id,
-    display: g.display
-  }
-}
-
 // given a goal node, returns the same node with
 // applicable tactics added as children
-async function getApplicableTactics(n: Node, rs: RpcSessionAtPos): Promise<Node> {
+async function getApplicableTactics(n: Node, apiData: APIData, rs: RpcSessionAtPos): Promise<Node> {
   assert(n.kind == 'goal',
     "Called getApplicableTactics on tactic node " + n.id)
 
-  const g = nodeToAPIGoal(n)
-  const tactics: APITactic[] = await rs.call("getApplicableTactics", g)
-  const tsxTactics = tactics.map((t: APITactic) => APITacticToNode(t))
+  const params = [n.id, apiData]
+  const tactics: APINode[] = await rs.call("getApplicableTactics", params)
+  const tsxTactics = tactics.map(APINodeToNode)
   return { ...n, children: tsxTactics }
 }
 
 // given a tactic node, returns the same node with
 // subgoals added as children
-async function getSubgoals(n: Node, rs: RpcSessionAtPos): Promise<Node> {
+async function getSubgoals(n: Node, apiData: APIData, rs: RpcSessionAtPos): Promise<Node> {
   assert(n.kind == 'tactic',
     "Called getSubgoals on goal node " + n.id)
 
-  const t = nodeToAPITactic(n)
-  const subgoals: APIGoal[] = await rs.call("getSubgoals", t)
-  const tsxGoals = subgoals.map((g: APIGoal) => APIGoalToNode(g))
+  const params = [n.id, apiData]
+  const subgoals: APINode[] = await rs.call("getSubgoals", params)
+  const tsxGoals = subgoals.map(APINodeToNode)
   return { ...n, children: tsxGoals }
-}
-
-// TODO
-async function temporaryTest(rs: RpcSessionAtPos): Promise<String> {
-  const s: String = await rs.call("Backend.temporaryTest", "")
-  return s
 }
 
 /* React */
@@ -359,47 +342,49 @@ type HoverflyProps = PanelWidgetProps & {
   tacticRange: Range;
 }
 
-async function insertSkip(ec: EditorConnection, uri: DocumentUri, tacticRange: Range) {
-  // NOTE: We could use `insertText` instead here.
-  await ec.api.applyEdit({
-    documentChanges:
-      [TextDocumentEdit.create({ uri: uri, version: null },
-        [TextEdit.replace(tacticRange, `skip\n${" ".repeat(tacticRange.start.character)}myWidgetTactic`)])]
-  })
-  await ec.revealPosition({ line: tacticRange.start.line + 1, character: tacticRange.end.character, uri: uri })
-}
+// async function insertSkip(ec: EditorConnection, uri: DocumentUri, tacticRange: Range) {
+//   // NOTE: We could use `insertText` instead here.
+//   await ec.api.applyEdit({
+//     documentChanges:
+//       [TextDocumentEdit.create({ uri: uri, version: null },
+//         [TextEdit.replace(tacticRange, `skip\n${" ".repeat(tacticRange.start.character)}myWidgetTactic`)])]
+//   })
+//   await ec.revealPosition({ line: tacticRange.start.line + 1, character: tacticRange.end.character, uri: uri })
+// }
 
 
-async function insertTactic(ec: EditorConnection, uri: DocumentUri, tacticRange: Range) {
-  // TODO: could also use the case names instead of bullets
-  await ec.api.applyEdit({
-    documentChanges:
-      [TextDocumentEdit.create({ uri: uri, version: null },
-        [TextEdit.replace(tacticRange, `skip\n${" ".repeat(tacticRange.start.character)}myWidgetTactic`)])]
-  })
-  await ec.revealPosition({ line: tacticRange.start.line + 1, character: tacticRange.end.character, uri: uri })
-}
+// async function insertTactic(ec: EditorConnection, uri: DocumentUri, tacticRange: Range) {
+//   // TODO: could also use the case names instead of bullets
+//   await ec.api.applyEdit({
+//     documentChanges:
+//       [TextDocumentEdit.create({ uri: uri, version: null },
+//         [TextEdit.replace(tacticRange, `skip\n${" ".repeat(tacticRange.start.character)}myWidgetTactic`)])]
+//   })
+//   await ec.revealPosition({ line: tacticRange.start.line + 1, character: tacticRange.end.character, uri: uri })
+// }
 
 function Hoverfly(props: HoverflyProps) {
   const [root, setRoot] = useState<Node | null>(null)
+  const [apiData, setAPIData] = useState<APIData | null>(null)
   const rs = useRpcSession()
   const ec = useContext(EditorContext)
 
   useEffect(() => {
-    rs.call('Backend.getInitialState', { goals: props.goals }).then((st) => {
-      const n = APIGoalToNode(st as APIGoal)
+    rs.call('Backend.getInitialState', { goals: props.goals }).then(st => {
+      const n = APINodeToNode((st as [APINode, APIData])[0])
       const selectedN: Node = { ...n, status: 'selected' }
       setRoot(selectedN)
+      setAPIData(apiData)
     }).catch((reason) => {
       console.error(reason)
     })
   }, [rs])
 
-  if (root !== null) {
+  if (root !== null && apiData !== null) {
     const onClick = async (n: Node) => {
       console.log("Clicked " + n.id)
-      await insertSkip(ec, props.pos.uri, props.tacticRange)
-      setRoot(await handleClick(root, n, rs))
+      // await insertSkip(ec, props.pos.uri, props.tacticRange)
+      setRoot(await handleClick(root, apiData, n, rs))
     }
     return <><HoverflyTree root={root} onClick={onClick} /></>
   } else {
