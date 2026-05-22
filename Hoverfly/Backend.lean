@@ -5,26 +5,16 @@ open Lean ProofWidgets Server
 
 deriving instance TypeName for Nat
 deriving instance TypeName for Elab.Term.SavedState
+
+-- TODO can we make this not unsafe
 unsafe instance [TypeName α] [TypeName β]
   : TypeName (α × β) :=
   TypeName.mk (α × β) (`Prod ++ TypeName.typeName α ++ TypeName.typeName β)
+
+-- TODO can we make this not unsafe
 unsafe instance [BEq α] [Hashable α] [TypeName α] [TypeName β]
   : TypeName (Std.HashMap α β) :=
   TypeName.mk (Std.HashMap α β) (`Std.HashMap ++ TypeName.typeName α ++ TypeName.typeName β)
-
-deriving instance ToJson for String.Pos.Raw
-deriving instance ToJson for Substring.Raw
-deriving instance ToJson for SourceInfo
-deriving instance ToJson for Syntax.Preresolved
-deriving instance ToJson for Syntax
-
-deriving instance FromJson for String.Pos.Raw
-deriving instance FromJson for Substring.Raw
-deriving instance FromJson for SourceInfo
-deriving instance FromJson for Syntax.Preresolved
-deriving instance FromJson for Syntax
-
-deriving instance RpcEncodable for Nat
 
 def StateId := Nat
   deriving OfNat, BEq, Hashable, ToJson, FromJson, HAdd
