@@ -375,9 +375,10 @@ function Hoverfly(props: HoverflyProps) {
   useEffect(() => {
     rs.call('Backend.getInitialState', { goals: props.goals, pos: props.pos }).then(st => {
       const [state, apiData] = st as [APINode, APIData]
-      const n = APINodeToNode(state)
-      const selectedN: Node = { ...n, status: 'selected' }
-      setRoot(selectedN)
+      const root = APINodeToNode(state)
+      const selectedRoot: Node = { ...root, status: 'selected' }
+      const rootWithChildren = getApplicableTactics(selectedRoot, apiData, rs)
+      setRoot(rootWithChildren)
       setAPIData(apiData)
     }).catch((reason) => {
       setError(reason?.message ?? String(reason))
@@ -390,7 +391,7 @@ function Hoverfly(props: HoverflyProps) {
   if (root !== null && apiData !== null) {
     const onClick = async (n: Node) => {
       console.log("Clicked " + n.id)
-      // await insertSkip(ec, props.pos.uri, props.tacticRange)
+
       setRoot(await handleClick(root, apiData, n, rs))
     }
     return <><HoverflyTree root={root} onClick={onClick} /></>
