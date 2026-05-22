@@ -267,7 +267,7 @@ function assert(p: boolean, e: string): void {
 
 /* External */
 
-type APIData = { stateRef: unknown, pos: DocumentPosition }
+type APIData = unknown
 
 type APINode = {
   id: number
@@ -295,7 +295,7 @@ async function getApplicableTactics(n: Node, apiData: APIData, rs: RpcSessionAtP
   assert(n.kind == 'goal',
     "Called getApplicableTactics on tactic node " + n.id)
 
-  const params = { id: n.id, stateRef: apiData.stateRef, pos: apiData.pos }
+  const params = { id: n.id, apiData: apiData }
   const tactics: APINode[] = await rs.call("Backend.getApplicableTactics", params)
   const tsxTactics = tactics.map(APINodeToNode)
   return { ...n, children: tsxTactics }
@@ -307,7 +307,7 @@ async function getSubgoals(n: Node, apiData: APIData, rs: RpcSessionAtPos): Prom
   assert(n.kind == 'tactic',
     "Called getSubgoals on goal node " + n.id)
 
-  const params = { id: n.id, stateRef: apiData.stateRef, pos: apiData.pos }
+  const params = { id: n.id, apiData: apiData }
   const subgoals: APINode[] = await rs.call("Backend.getSubgoals", params)
   const tsxGoals = subgoals.map(APINodeToNode)
   return { ...n, children: tsxGoals }
@@ -374,8 +374,7 @@ function Hoverfly(props: HoverflyProps) {
 
   useEffect(() => {
     rs.call('Backend.getInitialState', { goals: props.goals, pos: props.pos }).then(async st => {
-      const [state, stateRef] = st as [APINode, unknown]
-      const apiData: APIData = { stateRef, pos: props.pos }
+      const [state, apiData] = st as [APINode, APIData]
       const root = APINodeToNode(state)
       const selectedRoot: Node = { ...root, status: 'selected' }
       const rootWithChildren = await getApplicableTactics(selectedRoot, apiData, rs)
