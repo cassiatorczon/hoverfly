@@ -386,8 +386,7 @@ function Hoverfly(props: HoverflyProps) {
       setAPIData(apiData)
       setError("5")
     }).catch((reason) => {
-      setError("6")
-      setError(reason)
+      setError(reason?.message ?? String(reason))
       console.error(reason)
       return <p>{error}</p>
     })
