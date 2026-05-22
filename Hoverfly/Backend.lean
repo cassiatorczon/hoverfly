@@ -165,16 +165,14 @@ def checkWidget : Widget.Module where
 
 -- --   return
 
--- open scoped Json in
--- elab stx:"myWidgetTactic" : tactic => do
---   let some tacticRange := (← getFileMap).lspRangeOfStx? stx | return
---   Widget.savePanelWidgetInfo checkWidget.javascriptHash
---     (pure $ json% { tacticRange: $(tacticRange) }) stx
+open scoped Json in
+elab stx:"hoverfly" : tactic => do
+  let some tacticRange := (← getFileMap).lspRangeOfStx? stx | return
+  Widget.savePanelWidgetInfo checkWidget.javascriptHash
+    (pure $ json% { tacticRange: $(tacticRange) }) stx
 
--- theorem foobar : P ∧ Q -> P := by
---   skip
---   skip
---   myWidgetTactic
---   sorry
+theorem foobar : P ∧ Q -> P := by
+  hoverfly
+  sorry
 
 end Backend
