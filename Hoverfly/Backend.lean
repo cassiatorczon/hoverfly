@@ -3,19 +3,6 @@ import ProofWidgets
 namespace Backend
 open Lean ProofWidgets Server
 
-deriving instance TypeName for Nat
-deriving instance TypeName for Elab.Term.SavedState
-
--- TODO can we make this not unsafe
-unsafe instance [TypeName α] [TypeName β]
-  : TypeName (α × β) :=
-  TypeName.mk (α × β) (`Prod ++ TypeName.typeName α ++ TypeName.typeName β)
-
--- TODO can we make this not unsafe
-unsafe instance [BEq α] [Hashable α] [TypeName α] [TypeName β]
-  : TypeName (Std.HashMap α β) :=
-  TypeName.mk (Std.HashMap α β) (`Std.HashMap ++ TypeName.typeName α ++ TypeName.typeName β)
-
 def StateId := Nat
   deriving OfNat, BEq, Hashable, ToJson, FromJson, HAdd
 
