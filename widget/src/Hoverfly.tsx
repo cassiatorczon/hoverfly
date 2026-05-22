@@ -373,11 +373,11 @@ function Hoverfly(props: HoverflyProps) {
   const ec = useContext(EditorContext)
 
   useEffect(() => {
-    rs.call('Backend.getInitialState', { goals: props.goals, pos: props.pos }).then(st => {
+    rs.call('Backend.getInitialState', { goals: props.goals, pos: props.pos }).then(async st => {
       const [state, apiData] = st as [APINode, APIData]
       const root = APINodeToNode(state)
       const selectedRoot: Node = { ...root, status: 'selected' }
-      const rootWithChildren = getApplicableTactics(selectedRoot, apiData, rs)
+      const rootWithChildren = await getApplicableTactics(selectedRoot, apiData, rs)
       setRoot(rootWithChildren)
       setAPIData(apiData)
     }).catch((reason) => {
