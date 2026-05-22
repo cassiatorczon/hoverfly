@@ -376,7 +376,8 @@ function Hoverfly(props: HoverflyProps) {
   useEffect(() => {
     rs.call('Backend.getInitialState', { goals: props.goals }).then(st => {
       err = "1"
-      const n = APINodeToNode((st as [APINode, APIData])[0])
+      const [state, apiData] = st as [APINode, APIData]
+      const n = APINodeToNode(state)
       err = "2"
       const selectedN: Node = { ...n, status: 'selected' }
       err = "3"
@@ -396,7 +397,6 @@ function Hoverfly(props: HoverflyProps) {
   }, [rs])
 
   // err = "9"
-
   if (root !== null && apiData !== null) {
     const onClick = async (n: Node) => {
       console.log("Clicked " + n.id)
