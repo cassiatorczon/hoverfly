@@ -372,16 +372,30 @@ function Hoverfly(props: HoverflyProps) {
   const rs = useRpcSession()
   const ec = useContext(EditorContext)
 
+  var err = "0"
   useEffect(() => {
     rs.call('Backend.getInitialState', { goals: props.goals }).then(st => {
+      err = "1"
       const n = APINodeToNode((st as [APINode, APIData])[0])
+      err = "2"
       const selectedN: Node = { ...n, status: 'selected' }
+      err = "3"
       setRoot(selectedN)
+      err = "4"
       setAPIData(apiData)
+      err = "5"
     }).catch((reason) => {
+      err = "6"
+      err = reason
+      err = "7"
       console.error(reason)
+      err = "8"
+      return <p>{err}</p>
     })
+
   }, [rs])
+
+  // err = "9"
 
   if (root !== null && apiData !== null) {
     const onClick = async (n: Node) => {
@@ -391,6 +405,13 @@ function Hoverfly(props: HoverflyProps) {
     }
     return <><HoverflyTree root={root} onClick={onClick} /></>
   } else {
+    //
+    if (root == null) {
+      return <p>root null {err}</p>
+    } else {
+      return <p>apiData null {err}</p>
+    }
+    //
     return <p>Loading...</p>
   }
 }
