@@ -22,6 +22,8 @@ deriving instance FromJson for SourceInfo
 deriving instance FromJson for Syntax.Preresolved
 deriving instance FromJson for Syntax
 
+deriving instance RpcEncodable for Nat
+
 def StateId := Nat
   deriving OfNat, BEq, Hashable, ToJson, FromJson, HAdd
 
@@ -36,22 +38,12 @@ structure APINode where
   display : String
   deriving ToJson, FromJson
 
-deriving instance Server.RpcEncodable for Nat
-
-open Server in
 instance [BEq α] [Hashable α] [RpcEncodable α] [RpcEncodable β]
   : RpcEncodable (Std.HashMap α β) := by sorry
 
 open Server in
 instance [BEq α] [Hashable α] [RpcEncodable α] [RpcEncodable β]
   : RpcEncodable (α × β) := by sorry
-
--- it could synthesize this before I added × Nat :(
-open Server in
-instance : RpcEncodable (WithRpcRef ((Std.HashMap Nat Elab.Term.SavedState) × Nat)) := by sorry
-
-open Lean ProofWidgets Server
-
 
 structure GetInitialStateParams where
   -- goals : Array Widget.InteractiveGoal --TODO
@@ -193,14 +185,6 @@ def getApplicableTactics
 def checkWidget : Widget.Module where
   javascript := include_str ".."/".lake"/"build"/"js"/"Hoverfly.js"
 
--- open scoped Json in
--- elab stx:"myWidgetTactic" : tactic => do
---   let some tacticRange := (← getFileMap).lspRangeOfStx? stx | return
---   Widget.savePanelWidgetInfo checkWidget.javascriptHash
---     (pure $ json% { tacticRange: $(tacticRange) }) stx
-
-
-
 -- open Lean.Elab.Tactic in
 -- def myTactic : Tactic := λ stx => do
 --   -- let env <- getEnv
@@ -208,6 +192,12 @@ def checkWidget : Widget.Module where
 --   g.withContext do
 
 -- --   return
+
+-- open scoped Json in
+-- elab stx:"myWidgetTactic" : tactic => do
+--   let some tacticRange := (← getFileMap).lspRangeOfStx? stx | return
+--   Widget.savePanelWidgetInfo checkWidget.javascriptHash
+--     (pure $ json% { tacticRange: $(tacticRange) }) stx
 
 -- theorem foobar : P ∧ Q -> P := by
 --   skip
