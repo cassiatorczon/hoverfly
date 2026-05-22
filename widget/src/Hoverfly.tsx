@@ -363,6 +363,9 @@ type HoverflyProps = PanelWidgetProps & {
 //   await ec.revealPosition({ line: tacticRange.start.line + 1, character: tacticRange.end.character, uri: uri })
 // }
 
+// TODO -- Docs for WithRpcRef say:
+// All RPC requests are relative to an open file and an RPC session for that file.
+// The client must first connect to the session using $/lean/rpc/connect
 function Hoverfly(props: HoverflyProps) {
   const [root, setRoot] = useState<Node | null>(null)
   const [apiData, setAPIData] = useState<APIData | null>(null)
