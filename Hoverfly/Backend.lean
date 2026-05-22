@@ -18,8 +18,7 @@ structure APINode where
   deriving ToJson, FromJson
 
 structure GetInitialStateParams where
-  -- goals : Array Widget.InteractiveGoal --TODO
-  goal : Widget.InteractiveGoal
+  goals : Array Widget.InteractiveGoal --TODO
   pos : Lsp.Position --TODO
   deriving RpcEncodable
 
@@ -33,29 +32,34 @@ def getInitialState
   : RequestM (RequestTask (APINode × WithRpcRef State)) :=
   RequestM.withWaitFindSnapAtPos _params.pos fun snap => do
     RequestM.runTermElabM snap do
+      match _params.goals[0]? with
+      | some goal =>
+        -- get root goal API info
+        let display : String := toString goal.pretty
+        let rootGoal : APINode := {id := 0, display := display}
 
-      -- get root goal API info
-      let display : String := toString _params.goal.pretty
-      let rootGoal : APINode := {id := 0, display := display}
+        -- get proof state and mvarId at root goal
+        let rootProofState ← liftM (saveState : Lean.Elab.TermElabM _)
+        let rootMVarId := goal.mvarId
 
-      -- get proof state and mvarId at root goal
-      let rootProofState ← liftM (saveState : Lean.Elab.TermElabM _)
-      let rootMVarId := _params.goal.mvarId
+        -- initialize map of goal ids to MVarIds and States
+        let initialGoalMap := Std.HashMap.ofList [
+          (rootGoal.id, (rootMVarId, rootProofState))
+          ]
 
-      -- initialize map of goal ids to MVarIds and States
-      let initialGoalMap := Std.HashMap.ofList [
-        (rootGoal.id, (rootMVarId, rootProofState))
-        ]
+        -- initialize state
+        let initialState : State := {
+            nodeCounter := rootGoal.id + 1,
+            goalMap := initialGoalMap,
+            tacticMap := ∅
+          }
 
-      -- initialize state
-      let initialState : State := {
-          nodeCounter := rootGoal.id + 1,
-          goalMap := initialGoalMap,
-          tacticMap := ∅
-        }
-
-      let ref ← WithRpcRef.mk initialState
-      return (rootGoal, ref)
+        let ref ← WithRpcRef.mk initialState
+        return (rootGoal, ref)
+      | none =>
+        --TODO error behavior
+        let badRef ← WithRpcRef.mk {nodeCounter:=0, goalMap:=∅,tacticMap:=∅}
+        return ({id:=0,display:="err"}, badRef)
 
 
 structure GetSubgoalsParams where
@@ -131,7 +135,8 @@ def getApplicableTactics
       | some (mvarId, proofState) =>
 
         -- get all tactics
-        let ts : List Syntax := by sorry
+        let x ← `(tactic | rfl) --TODO
+        let ts : List Syntax := [x.raw]
 
         -- add each new tactic to map and return nodes and updated counter
         let f t stx := match t with
@@ -167,11 +172,10 @@ def checkWidget : Widget.Module where
 
 open scoped Json in
 elab stx:"hoverfly" : tactic => do
-  let some tacticRange := (← getFileMap).lspRangeOfStx? stx | return
   Widget.savePanelWidgetInfo checkWidget.javascriptHash
-    (pure $ json% { tacticRange: $(tacticRange) }) stx
+    (pure $ json% {  }) stx
 
-theorem foobar : P ∧ Q -> P := by
+theorem foobar : True := by
   hoverfly
   sorry
 
