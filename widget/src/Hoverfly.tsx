@@ -338,9 +338,7 @@ function HoverflyTree({ root, onClick }: { root: Node, onClick: (n: Node) => Pro
   )
 }
 
-type HoverflyProps = PanelWidgetProps & {
-  tacticRange: Range;
-}
+type HoverflyProps = PanelWidgetProps
 
 // async function insertSkip(ec: EditorConnection, uri: DocumentUri, tacticRange: Range) {
 //   // NOTE: We could use `insertText` instead here.
@@ -368,32 +366,27 @@ type HoverflyProps = PanelWidgetProps & {
 // The client must first connect to the session using $/lean/rpc/connect
 function Hoverfly(props: HoverflyProps) {
   const [root, setRoot] = useState<Node | null>(null)
+  // TODO : make this APIData | string | error to model error all in one?
   const [apiData, setAPIData] = useState<APIData | null>(null)
   const [error, setError] = useState<string | null>(null);
   const rs = useRpcSession()
   const ec = useContext(EditorContext)
 
   useEffect(() => {
-    rs.call('Backend.getInitialState', { goals: props.goals }).then(st => {
-      setError("1")
+    rs.call('Backend.getInitialState', { goals: props.goals, pos: props.pos }).then(st => {
       const [state, apiData] = st as [APINode, APIData]
       const n = APINodeToNode(state)
-      setError("2")
       const selectedN: Node = { ...n, status: 'selected' }
-      setError("3")
       setRoot(selectedN)
-      setError("4")
       setAPIData(apiData)
-      setError("5")
     }).catch((reason) => {
       setError(reason?.message ?? String(reason))
       console.error(reason)
-      return <p>{error}</p>
+      setError(reason)
     })
 
   }, [rs])
 
-  // err = "9"
   if (root !== null && apiData !== null) {
     const onClick = async (n: Node) => {
       console.log("Clicked " + n.id)
@@ -402,14 +395,11 @@ function Hoverfly(props: HoverflyProps) {
     }
     return <><HoverflyTree root={root} onClick={onClick} /></>
   } else {
-    //
-    if (root == null) {
-      return <p>root null {error}</p>
+    if (error == null) {
+      return <p>Loading...</p>
     } else {
-      return <p>apiData null {error}</p>
+      return <p>{error}</p>
     }
-    //
-    return <p>Loading...</p>
   }
 }
 
