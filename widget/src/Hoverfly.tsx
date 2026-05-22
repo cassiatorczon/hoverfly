@@ -369,29 +369,27 @@ type HoverflyProps = PanelWidgetProps & {
 function Hoverfly(props: HoverflyProps) {
   const [root, setRoot] = useState<Node | null>(null)
   const [apiData, setAPIData] = useState<APIData | null>(null)
+  const [error, setError] = useState<string | null>(null);
   const rs = useRpcSession()
   const ec = useContext(EditorContext)
 
-  var err = "0"
   useEffect(() => {
     rs.call('Backend.getInitialState', { goals: props.goals }).then(st => {
-      err = "1"
+      setError("1")
       const [state, apiData] = st as [APINode, APIData]
       const n = APINodeToNode(state)
-      err = "2"
+      setError("2")
       const selectedN: Node = { ...n, status: 'selected' }
-      err = "3"
+      setError("3")
       setRoot(selectedN)
-      err = "4"
+      setError("4")
       setAPIData(apiData)
-      err = "5"
+      setError("5")
     }).catch((reason) => {
-      err = "6"
-      err = reason
-      err = "7"
+      setError("6")
+      setError(reason)
       console.error(reason)
-      err = "8"
-      return <p>{err}</p>
+      return <p>{error}</p>
     })
 
   }, [rs])
@@ -407,9 +405,9 @@ function Hoverfly(props: HoverflyProps) {
   } else {
     //
     if (root == null) {
-      return <p>root null {err}</p>
+      return <p>root null {error}</p>
     } else {
-      return <p>apiData null {err}</p>
+      return <p>apiData null {error}</p>
     }
     //
     return <p>Loading...</p>
