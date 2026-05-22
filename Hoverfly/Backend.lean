@@ -5,10 +5,10 @@ open Lean ProofWidgets Server
 
 deriving instance TypeName for Nat
 deriving instance TypeName for Elab.Term.SavedState
-instance [BEq α] [Hashable α] [TypeName α] [TypeName β]
+instance [TypeName α] [TypeName β]
   : TypeName (α × β) := by sorry
 instance [BEq α] [Hashable α] [TypeName α] [TypeName β]
-  : TypeName (Std.HashMap α β) := by sorry
+  : TypeName (Std.HashMap α β) := by  sorry
 
 deriving instance ToJson for String.Pos.Raw
 deriving instance ToJson for Substring.Raw
@@ -37,13 +37,6 @@ structure APINode where
   id : StateId
   display : String
   deriving ToJson, FromJson
-
-instance [BEq α] [Hashable α] [RpcEncodable α] [RpcEncodable β]
-  : RpcEncodable (Std.HashMap α β) := by sorry
-
-open Server in
-instance [BEq α] [Hashable α] [RpcEncodable α] [RpcEncodable β]
-  : RpcEncodable (α × β) := by sorry
 
 structure GetInitialStateParams where
   -- goals : Array Widget.InteractiveGoal --TODO
