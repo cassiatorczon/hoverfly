@@ -3,7 +3,7 @@ import { useRpcSession, useAsync, mapRpcError, RpcSessionAtPos, EditorContext, P
 import { DocumentUri, Position, Range, TextDocumentEdit, TextDocumentIdentifier, TextEdit } from "vscode-languageserver-protocol";
 // import './App.css'
 
-type ID = string
+type ID = number
 
 type Kind = "tactic" | "goal"
 
@@ -12,7 +12,7 @@ type Status = "selected" | "semiselected" | "unselected"
 type MutableNode = {
   kind: Kind, // tactic or goal
   id: ID, // should be unique among all nodes; must have an immutable type
-  data: string, // Lean-recognizable description
+  display: string, // display
   completed: boolean, // a completed goal or tactic with all completed subgoals
   children: Node[], // applicable tactics for a goal, subgoals for a tactic
   status: Status, // display information
@@ -170,7 +170,7 @@ function nearestCommonAncestorWithSelected(n: Node, id: ID):
     }
   } else {
     assert(n.status === 'selected',
-      "Malformed tree: [" + n.data + "] is not selected and has no selected or"
+      "Malformed tree: [" + n.display + "] is not selected and has no selected or"
       + " semiselected immediate children")
     return n
   }
@@ -273,63 +273,30 @@ function assert(p: boolean, e: string): void {
 
 /* External */
 
-type APIGoal = {
-  id: string
-  data: string
-  children: APITactic[]
+type APINode = {
+  id: number
+  display: string
 }
 
-type APITactic = {
-  id: string
-  data: string
-  children: APIGoal[]
-}
 
-function APIGoalToNode(g: APIGoal): Node {
+function APIGoalToNode(n: APINode): Node {
   return {
     kind: 'goal',
-    id: g.id,
-    data: g.data,
+    id: n.id,
+    display: n.display,
     completed: false,
     status: 'unselected',
     visible: true,
     explored: false,
     cache: undefined,
-    children: g.children.map((t: APITactic) => APITacticToNode(t))
+    children: []
   }
 }
 
-function APITacticToNode(t: APITactic): Node {
-  return {
-    kind: 'tactic',
-    id: t.id,
-    data: t.data,
-    completed: false,
-    status: 'unselected',
-    visible: true,
-    explored: false,
-    cache: undefined,
-    children: t.children.map((g: APIGoal) => APIGoalToNode(g))
-  }
-}
-
-function nodeToAPIGoal(g: Node): APIGoal {
-  assert(g.kind === 'goal',
-    "Tried to convert node " + g.id + " of kind " + g.kind + " to Lean goal")
+function nodeToAPINode(g: Node): APINode {
   return {
     id: g.id,
-    data: g.data,
-    children: g.children.map((t: Node) => nodeToAPITactic(t))
-  }
-}
-
-function nodeToAPITactic(t: Node): APITactic {
-  assert(t.kind === 'tactic',
-    "Tried to convert node " + t.id + " of kind " + t.kind + " to Lean tactic")
-  return {
-    id: t.id,
-    data: t.data,
-    children: t.children.map((g: Node) => nodeToAPIGoal(g))
+    display: g.display
   }
 }
 
@@ -359,7 +326,7 @@ async function getSubgoals(n: Node, rs: RpcSessionAtPos): Promise<Node> {
 
 // TODO
 async function temporaryTest(rs: RpcSessionAtPos): Promise<String> {
-  const s: String = await rs.call("API.temporaryTest", "")
+  const s: String = await rs.call("Backend.temporaryTest", "")
   return s
 }
 
@@ -373,7 +340,7 @@ function renderNode(n: Node, onClick: (clicked: Node) => Promise<void>): React.R
 
   return (
     <Fragment key={n.id}>
-      <li onClick={() => onClick(n)}>{n.data} [{n.status}, {n.explored}, {n.id}, {n.kind}]</li>
+      <li onClick={() => onClick(n)}>{n.display} [{n.status}, {n.explored}, {n.id}, {n.kind}]</li>
       <ul> {n.children.map((child: Node) => renderNode(child, onClick))}</ul >
     </Fragment>)
 }
@@ -419,7 +386,7 @@ function Hoverfly(props: HoverflyProps) {
   const ec = useContext(EditorContext)
 
   useEffect(() => {
-    rs.call('API.getInitialState', { goals: props.goals }).then((st) => {
+    rs.call('Backend.getInitialState', { goals: props.goals }).then((st) => {
       const n = APIGoalToNode(st as APIGoal)
       const selectedN: Node = { ...n, status: 'selected' }
       setRoot(selectedN)
