@@ -5,10 +5,12 @@ open Lean ProofWidgets Server
 
 deriving instance TypeName for Nat
 deriving instance TypeName for Elab.Term.SavedState
-instance [TypeName α] [TypeName β]
-  : TypeName (α × β) := by sorry
-instance [BEq α] [Hashable α] [TypeName α] [TypeName β]
-  : TypeName (Std.HashMap α β) := by  sorry
+unsafe instance [TypeName α] [TypeName β]
+  : TypeName (α × β) :=
+  TypeName.mk (α × β) (`Prod ++ TypeName.typeName α ++ TypeName.typeName β)
+unsafe instance [BEq α] [Hashable α] [TypeName α] [TypeName β]
+  : TypeName (Std.HashMap α β) :=
+  TypeName.mk (Std.HashMap α β) (`Std.HashMap ++ TypeName.typeName α ++ TypeName.typeName β)
 
 deriving instance ToJson for String.Pos.Raw
 deriving instance ToJson for Substring.Raw
