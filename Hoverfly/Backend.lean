@@ -13,6 +13,7 @@ structure State where
   deriving TypeName
 
 structure APINode where
+  isGoal : Bool
   id : StateId
   display : String
   deriving ToJson, FromJson
@@ -36,7 +37,8 @@ def getInitialState
       | some goal =>
         -- get root goal API info
         let display : String := toString goal.pretty
-        let rootGoal : APINode := {id := 0, display := display}
+        let rootGoal : APINode :=
+          {isGoal := true, id := 0, display := display}
 
         -- get proof state and mvarId at root goal
         let rootProofState ← liftM (saveState : Lean.Elab.TermElabM _)
@@ -58,8 +60,9 @@ def getInitialState
         return (rootGoal, ref)
       | none =>
         --TODO error behavior
-        let badRef ← WithRpcRef.mk {nodeCounter:=0, goalMap:=∅,tacticMap:=∅}
-        return ({id:=0,display:="err"}, badRef)
+        let badRef ←
+          WithRpcRef.mk {nodeCounter:=0, goalMap:=∅,tacticMap:=∅}
+        return ({isGoal := false, id:=0,display:="err"}, badRef)
 
 
 structure GetSubgoalsParams where
@@ -97,11 +100,13 @@ def getSubgoals
           let newProofState ← liftM (saveState : Lean.Elab.TermElabM Lean.Elab.Term.SavedState)
           let f t mvarId := match t with
             | (nodes, tempGoalMap, c) =>
-              let apiNode : APINode := {id := c, display :="todo"}
+              let apiNode : APINode :=
+                {isGoal := true, id := c, display :="todo"}
               let goalInfo := (mvarId, newProofState)
               let newMap := tempGoalMap.insert c goalInfo
               (apiNode :: nodes, newMap, c + 1)
-          let (goals, newGoalMap, newCounter) := result.foldl f ([], goalMap, nodeCounter)
+          let (goals, newGoalMap, newCounter) :=
+            result.foldl f ([], goalMap, nodeCounter)
 
           -- update state
           let newState ← WithRpcRef.mk {
@@ -141,11 +146,13 @@ def getApplicableTactics
         -- add each new tactic to map and return nodes and updated counter
         let f t stx := match t with
           | (nodes, tempTacticMap, c) =>
-            let apiNode : APINode := {id := c, display :="todo"}
+            let apiNode : APINode :=
+              {isGoal := false, id := c, display :="todo"}
             let tacticInfo := (stx, _params.id)
             let newMap := tempTacticMap.insert c tacticInfo
             (apiNode :: nodes, newMap, c + 1)
-        let (tactics, newTacticMap, newCounter) := ts.foldl f ([], tacticMap, nodeCounter)
+        let (tactics, newTacticMap, newCounter) :=
+          ts.foldl f ([], tacticMap, nodeCounter)
 
         -- update state
         let newState ← WithRpcRef.mk {
@@ -172,11 +179,70 @@ def checkWidget : Widget.Module where
 
 open scoped Json in
 elab stx:"hoverfly" : tactic => do
+  let rootProofState ← liftM (saveState : Lean.Elab.TermElabM _)
+  let rootMVarId ← Elab.Tactic.getMainGoal
+
+  -- make API copy of root goal
+  let display ← Meta.ppGoal rootMVarId
+  let rootGoal : APINode :=
+          {isGoal := true, id := 0, display := display.pretty'}
+
+  -- initialize map of goal ids to MVarIds and States
+  let initialGoalMap := Std.HashMap.ofList [
+    (rootGoal.id, (rootMVarId, rootProofState))
+    ]
+
+  -- initialize state
+  let initialState : State := {
+      nodeCounter := rootGoal.id + 1,
+      goalMap := initialGoalMap,
+      tacticMap := ∅
+    }
+  let ref ← WithRpcRef.mk initialState
+
+  let jsonRoot := toJson rootGoal
+  -- TODO: how to do the below?
+  --let jsonAPIData := toJson ref
+
   Widget.savePanelWidgetInfo checkWidget.javascriptHash
-    (pure $ json% {  }) stx
+    (pure $ json% { root: $(rootGoal) /-, apiData: $(ref) -/ }) stx
+
+
+/-
+
+      match _params.goals[0]? with
+      | some goal =>
+        -- get root goal API info
+        let display : String := toString goal.pretty
+        let rootGoal : APINode :=
+          {isGoal := true, id := 0, display := display}
+
+        -- get proof state and mvarId at root goal
+        let rootProofState ← liftM (saveState : Lean.Elab.TermElabM _)
+        let rootMVarId := goal.mvarId
+
+        -- initialize map of goal ids to MVarIds and States
+        let initialGoalMap := Std.HashMap.ofList [
+          (rootGoal.id, (rootMVarId, rootProofState))
+          ]
+
+        -- initialize state
+        let initialState : State := {
+            nodeCounter := rootGoal.id + 1,
+            goalMap := initialGoalMap,
+            tacticMap := ∅
+          }
+
+        let ref ← WithRpcRef.mk initialState
+        return (rootGoal, ref)-/
 
 theorem foobar : True := by
   hoverfly
   sorry
+
+
+-- theorem demo (n m : Nat) : n <= m → ∃ x, m = x + n := by
+--   hoverfly
+--   sorry
 
 end Backend

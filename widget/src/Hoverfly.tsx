@@ -270,22 +270,37 @@ function assert(p: boolean, e: string): void {
 type APIData = unknown
 
 type APINode = {
+  isGoal: boolean
   id: number
   display: string
 }
 
 
 function APINodeToNode(n: APINode): Node {
-  return {
-    kind: 'goal',
-    id: n.id,
-    display: n.display,
-    completed: false,
-    status: 'unselected',
-    visible: true,
-    explored: false,
-    cache: undefined,
-    children: []
+  if (n.isGoal) {
+    return {
+      kind: 'goal',
+      id: n.id,
+      display: n.display,
+      completed: false,
+      status: 'unselected',
+      visible: true,
+      explored: false,
+      cache: undefined,
+      children: []
+    }
+  } else {
+    return {
+      kind: 'tactic',
+      id: n.id,
+      display: n.display,
+      completed: false,
+      status: 'unselected',
+      visible: true,
+      explored: false,
+      cache: undefined,
+      children: []
+    }
   }
 }
 
@@ -338,7 +353,10 @@ function HoverflyTree({ root, onClick }: { root: Node, onClick: (n: Node) => Pro
   )
 }
 
-type HoverflyProps = PanelWidgetProps
+type HoverflyProps = PanelWidgetProps & {
+  root: APINode;
+  apiData: APIData;
+}
 
 // async function insertSkip(ec: EditorConnection, uri: DocumentUri, tacticRange: Range) {
 //   // NOTE: We could use `insertText` instead here.
