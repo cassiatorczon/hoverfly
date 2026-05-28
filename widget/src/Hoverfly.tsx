@@ -9,7 +9,7 @@ import {
   updateNodes,
   changeStatusAtSelected,
   changeStatusAtId
-} from './Tree.tsx'
+} from './Tree'
 // import './App.css'
 
 /* Handler */
