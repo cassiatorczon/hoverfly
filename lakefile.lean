@@ -1,0 +1,55 @@
+import Lake
+open Lake DSL System
+
+package "hoverfly" where
+  version := v!"0.1.0"
+
+require ProofWidgets4 from git
+  "https://github.com/leanprover-community/ProofWidgets4" @ "v0.0.83"
+
+require aesop from git
+  "https://github.com/leanprover-community/aesop" @ "v4.24.0"
+
+/-
+The following config is inspired by https://github.com/leanprover-community/ProofWidgets4/blob/main/lakefile.lean.
+-/
+
+input_dir widgetSrcs where
+  path := "widget" / "src"
+  filter := .extension <| .mem #["ts", "tsx"]
+  text := true
+
+input_file widgetPackageJson where
+  path := "widget" / "package.json"
+  text := true
+
+input_file widgetTsconfig where
+  path := "widget" / "tsconfig.json"
+  text := true
+
+input_file widgetRollupConfig where
+  path := "widget" / "rollup.config.js"
+  text := true
+
+target widget pkg : Unit := do
+  let srcs ← widgetSrcs.fetch
+  let packageJson ← widgetPackageJson.fetch
+  let tsconfig ← widgetTsconfig.fetch
+  let rollupConfig ← widgetRollupConfig.fetch
+  srcs.bindM (sync := true) fun _ =>
+  packageJson.bindM (sync := true) fun _ =>
+  tsconfig.bindM (sync := true) fun _ =>
+  rollupConfig.mapM fun _ => do
+    let traceFile := pkg.buildDir / "js" / "lake.trace"
+    buildUnlessUpToDate traceFile (← getTrace) traceFile do
+      proc {
+        cmd := "npm"
+        args := #["run", "build"]
+        cwd := some (pkg.dir / "widget")
+      }
+
+lean_lib Hoverfly where
+  needs := #[widget]
+
+lean_exe hoverfly where
+  root := `Main
