@@ -200,12 +200,11 @@ elab stx:"hoverfly" : tactic => do
     }
   let ref ← WithRpcRef.mk initialState
 
-  let jsonRoot := toJson rootGoal
-  -- TODO: how to do the below?
-  --let jsonAPIData := toJson ref
-
   Widget.savePanelWidgetInfo checkWidget.javascriptHash
-    (pure $ json% { root: $(rootGoal) /-, apiData: $(ref) -/ }) stx
+    (do
+      let jsonRoot ← rpcEncode rootGoal
+      let jsonApiData ← rpcEncode ref
+      pure $ json% { root: $(jsonRoot) , apiData: $(jsonApiData) }) stx
 
 
 /-
