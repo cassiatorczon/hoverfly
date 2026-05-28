@@ -21,7 +21,9 @@
     "strict": true,
     "isolatedModules": true,
     /* Completeness */
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "noEmit": true, //todo: we need this false
+    "allowImportingTsExtensions": true
   },
   "include": [
     "./src/*.ts",
