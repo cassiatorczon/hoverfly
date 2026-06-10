@@ -195,13 +195,13 @@ type HoverflyProps = PanelWidgetProps & {
 // The client must first connect to the session using $/lean/rpc/connect
 function Hoverfly(props: HoverflyProps) {
   const [root, setRoot] = useState<Node>(APINodeToNode(props.root))
-  const [apiData, setAPIData] = useState<APIData>(props.apiData)
+  // const [apiData, setAPIData] = useState<APIData>(props.apiData)
   const rs = useRpcSession()
 
   const onClick = async (n: Node) => {
     console.log("Clicked " + n.id)
 
-    setRoot(await handleClick(root, apiData, n, rs))
+    setRoot(await handleClick(root, props.apiData, n, rs))
   }
   return <><HoverflyTree root={root} onClick={onClick} /></>
 }
