@@ -190,68 +190,20 @@ type HoverflyProps = PanelWidgetProps & {
   apiData: APIData;
 }
 
-// async function insertSkip(ec: EditorConnection, uri: DocumentUri, tacticRange: Range) {
-//   // NOTE: We could use `insertText` instead here.
-//   await ec.api.applyEdit({
-//     documentChanges:
-//       [TextDocumentEdit.create({ uri: uri, version: null },
-//         [TextEdit.replace(tacticRange, `skip\n${" ".repeat(tacticRange.start.character)}myWidgetTactic`)])]
-//   })
-//   await ec.revealPosition({ line: tacticRange.start.line + 1, character: tacticRange.end.character, uri: uri })
-// }
-
-
-// async function insertTactic(ec: EditorConnection, uri: DocumentUri, tacticRange: Range) {
-//   // TODO: could also use the case names instead of bullets
-//   await ec.api.applyEdit({
-//     documentChanges:
-//       [TextDocumentEdit.create({ uri: uri, version: null },
-//         [TextEdit.replace(tacticRange, `skip\n${" ".repeat(tacticRange.start.character)}myWidgetTactic`)])]
-//   })
-//   await ec.revealPosition({ line: tacticRange.start.line + 1, character: tacticRange.end.character, uri: uri })
-// }
-
 // TODO -- Docs for WithRpcRef say:
 // All RPC requests are relative to an open file and an RPC session for that file.
 // The client must first connect to the session using $/lean/rpc/connect
 function Hoverfly(props: HoverflyProps) {
   const [root, setRoot] = useState<Node>(APINodeToNode(props.root))
-  // TODO : make this APIData | string | error to model error all in one?
   const [apiData, setAPIData] = useState<APIData>(props.apiData)
-  // const [error, setError] = useState<string | null>(null);
   const rs = useRpcSession()
-  // const ec = useContext(EditorContext)
 
-  // useEffect(() => {
-  //   rs.call('Backend.getInitialState', { goals: props.goals, pos: props.pos }).then(async st => {
-  //     const [state, apiData] = st as [APINode, APIData]
-  //     const root = APINodeToNode(state)
-  //     const selectedRoot: Node = { ...root, status: 'selected' }
-  //     const rootWithChildren = await getApplicableTactics(selectedRoot, apiData, rs)
-  //     setRoot(rootWithChildren)
-  //     setAPIData(apiData)
-  //   }).catch((reason) => {
-  //     console.error(reason)
-  //     setError(reason?.message ?? String(reason))
-  //   })
-
-  // }, [rs])
   const onClick = async (n: Node) => {
     console.log("Clicked " + n.id)
 
     setRoot(await handleClick(root, apiData, n, rs))
   }
   return <><HoverflyTree root={root} onClick={onClick} /></>
-
-  // if (root !== null && apiData !== null) {
-
-  // } else {
-  //   if (error == null) {
-  //     return <p>Loading...</p>
-  //   } else {
-  //     return <p>{error}</p>
-  //   }
-  // }
 }
 
 export default Hoverfly
