@@ -95,7 +95,9 @@ async function handleClick(root: Node, apiData: APIData, clicked: Node, rs: RpcS
 
 /* External */
 
-type APIData = unknown
+type APIData = {
+  p: string
+}
 
 type APINode = {
   isGoal: boolean
@@ -211,42 +213,43 @@ type HoverflyProps = PanelWidgetProps & {
 // All RPC requests are relative to an open file and an RPC session for that file.
 // The client must first connect to the session using $/lean/rpc/connect
 function Hoverfly(props: HoverflyProps) {
-  const [root, setRoot] = useState<Node | null>(null)
+  const [root, setRoot] = useState<Node>(APINodeToNode(props.root))
   // TODO : make this APIData | string | error to model error all in one?
-  const [apiData, setAPIData] = useState<APIData | null>(null)
-  const [error, setError] = useState<string | null>(null);
+  const [apiData, setAPIData] = useState<APIData>(props.apiData)
+  // const [error, setError] = useState<string | null>(null);
   const rs = useRpcSession()
-  const ec = useContext(EditorContext)
+  // const ec = useContext(EditorContext)
 
-  useEffect(() => {
-    rs.call('Backend.getInitialState', { goals: props.goals, pos: props.pos }).then(async st => {
-      const [state, apiData] = st as [APINode, APIData]
-      const root = APINodeToNode(state)
-      const selectedRoot: Node = { ...root, status: 'selected' }
-      const rootWithChildren = await getApplicableTactics(selectedRoot, apiData, rs)
-      setRoot(rootWithChildren)
-      setAPIData(apiData)
-    }).catch((reason) => {
-      console.error(reason)
-      setError(reason?.message ?? String(reason))
-    })
+  // useEffect(() => {
+  //   rs.call('Backend.getInitialState', { goals: props.goals, pos: props.pos }).then(async st => {
+  //     const [state, apiData] = st as [APINode, APIData]
+  //     const root = APINodeToNode(state)
+  //     const selectedRoot: Node = { ...root, status: 'selected' }
+  //     const rootWithChildren = await getApplicableTactics(selectedRoot, apiData, rs)
+  //     setRoot(rootWithChildren)
+  //     setAPIData(apiData)
+  //   }).catch((reason) => {
+  //     console.error(reason)
+  //     setError(reason?.message ?? String(reason))
+  //   })
 
-  }, [rs])
+  // }, [rs])
+  const onClick = async (n: Node) => {
+    console.log("Clicked " + n.id)
 
-  if (root !== null && apiData !== null) {
-    const onClick = async (n: Node) => {
-      console.log("Clicked " + n.id)
-
-      setRoot(await handleClick(root, apiData, n, rs))
-    }
-    return <><HoverflyTree root={root} onClick={onClick} /></>
-  } else {
-    if (error == null) {
-      return <p>Loading...</p>
-    } else {
-      return <p>{error}</p>
-    }
+    setRoot(await handleClick(root, apiData, n, rs))
   }
+  return <><HoverflyTree root={root} onClick={onClick} /></>
+
+  // if (root !== null && apiData !== null) {
+
+  // } else {
+  //   if (error == null) {
+  //     return <p>Loading...</p>
+  //   } else {
+  //     return <p>{error}</p>
+  //   }
+  // }
 }
 
 export default Hoverfly
