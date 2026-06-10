@@ -20,6 +20,8 @@ async function handleClick(root: Node, apiData: APIData, clicked: Node, rs: RpcS
     console.log("Node " + clicked.id + " was already selected.")
     // User has clicked the already-selected node. Do nothing.
     return root
+  } else {
+    console.log("Selected note: " + clicked.id + ".")
   }
 
   const nca = nearestCommonAncestorWithSelected(root, clicked.id)
