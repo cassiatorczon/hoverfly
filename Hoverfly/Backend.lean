@@ -140,14 +140,15 @@ def getApplicableTactics
       | some (mvarId, proofState) =>
 
         -- get all tactics
-        let x ← `(tactic | rfl) --TODO
-        let ts : List Syntax := [x.raw]
+        let tac_rfl ← `(tactic | rfl) --TODO
+        let tac_and ← `(tactic | apply And.intro)
+        let ts : List Syntax := [tac_rfl.raw, tac_and.raw]
 
         -- add each new tactic to map and return nodes and updated counter
         let f t stx := match t with
           | (nodes, tempTacticMap, c) =>
             let apiNode : APINode :=
-              {isGoal := false, id := c, display :="todo"}
+              {isGoal := false, id := c, display := stx.prettyPrint.pretty'} --TODO
             let tacticInfo := (stx, _params.id)
             let newMap := tempTacticMap.insert c tacticInfo
             (apiNode :: nodes, newMap, c + 1)
@@ -235,13 +236,15 @@ elab stx:"hoverfly" : tactic => do
         let ref ← WithRpcRef.mk initialState
         return (rootGoal, ref)-/
 
-theorem foobar : True /\ True := by
+theorem foobar : 1 = 1 /\ 2 = 2 := by
   hoverfly
   sorry
 
 
--- theorem demo (n m : Nat) : n <= m → ∃ x, m = x + n := by
---   hoverfly
---   sorry
+theorem demo (n m : Nat) : n <= m → ∃ x, m = x + n := by
+  intro
+
+  hoverfly
+  sorry
 
 end Backend
