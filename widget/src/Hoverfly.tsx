@@ -1,4 +1,4 @@
-import { Fragment, useState, useEffect, useContext } from 'react'
+import { Fragment, useState, useContext } from 'react'
 import { useRpcSession, useAsync, mapRpcError, RpcSessionAtPos, EditorContext, PanelWidgetProps, EditorConnection, DocumentPosition } from '@leanprover/infoview';
 import { DocumentUri, Position, Range, TextDocumentEdit, TextDocumentIdentifier, TextEdit } from "vscode-languageserver-protocol";
 import {
@@ -17,15 +17,15 @@ import {
 
 async function handleClick(
   root: Node,
-  apiData: APIData,
+  stateRef: APIData,
   clicked: Node,
   rs: RpcSessionAtPos,
-  pos: DocumentPosition): Promise<Node> {
+  pos: DocumentPosition): Promise<NodeAndStateRef> {
 
   if (clicked.status === 'selected') {
     // User has clicked the already-selected node. Do nothing.
     console.info("Node " + clicked.id + " was already selected.")
-    return root
+    return { node: root, stateRef }
   } else {
     console.debug("Clicked unselected node: " + clicked.id + ".")
   }
@@ -45,7 +45,7 @@ async function handleClick(
     // update tree
     const update = async (n: Node) => n.id === nca.id ? ncaNewStatus : n
     const breakAfter = (n: Node) => n.id === nca.id
-    return updateNodes(root, update, breakAfter)
+    return { node: await updateNodes(root, update, breakAfter), stateRef }
 
   } else if (nca.status === 'selected') {
     console.debug("Previously selected node " + nca.id + " is an ancestor of" +
@@ -70,7 +70,10 @@ async function handleClick(
       } else {
         const update = async (n: Node) =>
           n.id === clicked.id ? (clicked.cache as Node) : n
-        return updateNodes(parentUpdated, update, breakAfter)
+        return {
+          node: await updateNodes(parentUpdated, update, breakAfter),
+          stateRef
+        }
       }
 
     } else {
@@ -79,15 +82,24 @@ async function handleClick(
 
       // change node status to selected
       const clickedUpdated =
-        changeStatusAtId(parentUpdated, clicked.id, 'selected')
+        await changeStatusAtId(parentUpdated, clicked.id, 'selected')
 
-      const update = async (n: Node) => n.id === clicked.id
-        ? n.kind === 'goal'
-          ? { ...await getApplicableTactics(n, apiData, rs, pos), explored: true }
-          : await getSubgoals(n, apiData, rs, pos)
-        : n
+      let newStateRef = stateRef
+      const update = async (n: Node) => {
+        if (n.id !== clicked.id) return n
+        const expanded = n.kind === 'goal'
+          ? await getApplicableTactics(n, stateRef, rs, pos)
+          : await getSubgoals(n, stateRef, rs, pos)
+        newStateRef = expanded.stateRef
+        return n.kind === 'goal'
+          ? { ...expanded.node, explored: true }
+          : expanded.node
+      }
 
-      return updateNodes(await clickedUpdated, update, breakAfter)
+      return {
+        node: await updateNodes(clickedUpdated, update, breakAfter),
+        stateRef: newStateRef
+      }
     }
   } else {
     console.debug("Clicked node " + clicked.id + " is not an ancestor of " +
@@ -111,7 +123,10 @@ async function handleClick(
         : n
 
     const breakAfterClicked = (n: Node) => n.id === clicked.id
-    return updateNodes(root, updateClicked, breakAfterClicked)
+    return {
+      node: await updateNodes(root, updateClicked, breakAfterClicked),
+      stateRef
+    }
   }
 }
 
@@ -156,42 +171,43 @@ function APINodeToNode(n: APINode): Node {
   }
 }
 
-// given a goal node, returns the same node with
-// applicable tactics added as children
+type NodeAndStateRef = { node: Node, stateRef: APIData }
+
 async function getApplicableTactics(
   n: Node,
-  apiData: APIData,
+  stateRef: APIData,
   rs: RpcSessionAtPos,
-  pos: DocumentPosition): Promise<Node> {
+  pos: DocumentPosition): Promise<NodeAndStateRef> {
 
   assert(n.kind == 'goal',
     "Called getApplicableTactics on tactic node " + n.id)
 
   // get tactic list
-  const params = { id: n.id, apiData: apiData, pos: pos }
-  const tactics: APINode[] =
+  const params = { id: n.id, stateRef: stateRef, pos: pos }
+  const [tactics, newStateRef]: [APINode[], APIData] =
     await rs.call("Backend.getApplicableTactics", params)
   const tsxTactics = tactics.map(APINodeToNode)
 
-  return { ...n, children: tsxTactics }
+  return { node: { ...n, children: tsxTactics }, stateRef: newStateRef }
 }
 
-// given a tactic node, returns the same node with
-// subgoals added as children
+// given a tactic node, returns the same node with subgoals added as children,
+// plus the updated server state ref
 async function getSubgoals(
   n: Node,
-  apiData: APIData,
+  stateRef: APIData,
   rs: RpcSessionAtPos,
-  pos: DocumentPosition): Promise<Node> {
+  pos: DocumentPosition): Promise<NodeAndStateRef> {
 
   assert(n.kind == 'tactic', "Called getSubgoals on goal node " + n.id)
 
   // get subgoal list
-  const params = { id: n.id, apiData: apiData, pos: pos }
-  const subgoals: APINode[] = await rs.call("Backend.getSubgoals", params)
+  const params = { id: n.id, stateRef: stateRef, pos: pos }
+  const [subgoals, newStateRef]: [APINode[], APIData] =
+    await rs.call("Backend.getSubgoals", params)
   const tsxGoals = subgoals.map(APINodeToNode)
 
-  return { ...n, children: tsxGoals }
+  return { node: { ...n, children: tsxGoals }, stateRef: newStateRef }
 }
 
 /* React */
@@ -228,36 +244,32 @@ type HoverflyProps = PanelWidgetProps & {
 // All RPC requests are relative to an open file and an RPC session for that file.
 // The client must first connect to the session using $/lean/rpc/connect
 function Hoverfly(props: HoverflyProps) {
-  const [root, setRoot] = useState<Node | null>(null)
-  // const [apiData, setAPIData] = useState<APIData>(props.apiData)
-
   const rs = useRpcSession()
 
-  if (root === null) {
-    // update root selected status
-    const selectedRoot = selectRoot(APINodeToNode(props.root))
+  const loaded = useAsync(
+    () => getApplicableTactics(
+      selectRoot(APINodeToNode(props.root)), props.apiData, rs, props.pos),
+    [props.root, props.apiData, rs, props.pos])
 
-    // update root children
-    const rootWithChildren = useAsync(() =>
-      getApplicableTactics(selectedRoot,
-        props.apiData, rs, props.pos))
+  // NOTE: Once set, this overrides the root from async. That's intended (async
+  // is for initialization), but could be annoying later if it isn't.
+  const [saved, setSaved] = useState<NodeAndStateRef | null>(null)
+  const current = saved ?? (loaded.state === 'resolved' ? loaded.value : null)
 
-    if (rootWithChildren.state === 'resolved') {
-
-      setRoot(rootWithChildren.value)
-    } else {
-      console.error("Call for children of root node not resolved.")
-      // TODO: error behavior?
+  if (current === null) {
+    if (loaded.state === 'rejected') {
+      console.error("Call for children of root node failed: ",
+        mapRpcError(loaded.error))
+      return <>Failed to load.</>
     }
-  } else {
-    const onClick = async (n: Node) => {
-      console.info("Clicked node " + n.id)
-
-      setRoot(await handleClick(root, props.apiData, n, rs, props.pos))
-    }
-    return <><HoverflyTree root={root} onClick={onClick} /></>
+    return <>Loading...</>
   }
 
+  const onClick = async (n: Node) => {
+    console.info("Clicked node " + n.id)
+    setSaved(await handleClick(current.node, current.stateRef, n, rs, props.pos))
+  }
+  return <><HoverflyTree root={current.node} onClick={onClick} /></>
 }
 
 export default Hoverfly
