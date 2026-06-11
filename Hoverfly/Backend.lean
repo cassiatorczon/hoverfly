@@ -235,7 +235,7 @@ elab stx:"hoverfly" : tactic => do
         let ref ← WithRpcRef.mk initialState
         return (rootGoal, ref)-/
 
-theorem foobar : True := by
+theorem foobar : True /\ True := by
   hoverfly
   sorry
 

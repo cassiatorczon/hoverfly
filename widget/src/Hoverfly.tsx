@@ -8,38 +8,48 @@ import {
   cacheChild,
   updateNodes,
   changeStatusAtSelected,
-  changeStatusAtId
+  changeStatusAtId,
+  selectRoot
 } from './Tree'
 // import './App.css'
 
 /* Handler */
 
-async function handleClick(root: Node, apiData: APIData, clicked: Node, rs: RpcSessionAtPos): Promise<Node> {
+async function handleClick(
+  root: Node,
+  apiData: APIData,
+  clicked: Node,
+  rs: RpcSessionAtPos,
+  pos: DocumentPosition): Promise<Node> {
 
   if (clicked.status === 'selected') {
-    console.log("Node " + clicked.id + " was already selected.")
     // User has clicked the already-selected node. Do nothing.
+    console.info("Node " + clicked.id + " was already selected.")
     return root
   } else {
-    console.log("Selected note: " + clicked.id + ".")
+    console.debug("Clicked unselected node: " + clicked.id + ".")
   }
 
   const nca = nearestCommonAncestorWithSelected(root, clicked.id)
 
   if (nca.id === clicked.id) {
-    console.log("Case 1: nca " + nca.id + " clicked " + clicked.id)
-    // previously selected node was a descendant of clicked node
+    console.debug("Clicked node " + clicked.id + " is an ancestor of " +
+      "previously selected node.")
+
     // cache applicable subtree of clicked node
-    // change clicked node status to 'selected
     const ncaPostCache = cacheChild(nca)
+
+    // change clicked node status to 'selected'
     const ncaNewStatus: Node = { ...ncaPostCache, status: 'selected' }
 
+    // update tree
     const update = async (n: Node) => n.id === nca.id ? ncaNewStatus : n
     const breakAfter = (n: Node) => n.id === nca.id
     return updateNodes(root, update, breakAfter)
+
   } else if (nca.status === 'selected') {
-    console.log("Case 2: nca " + nca.id + " clicked " + clicked.id)
-    // previously selected node was an ancestor of clicked node
+    console.debug("Previously selected node " + nca.id + " is an ancestor of" +
+      " clicked node " + clicked.id + ".")
 
     // if the previous node was a non-parent ancestor, the
     // current node should never have been clickable
@@ -51,30 +61,39 @@ async function handleClick(root: Node, apiData: APIData, clicked: Node, rs: RpcS
 
     const breakAfter = (n: Node) => n.id === clicked.id
     if (clicked.explored) {
-      console.log("Restoring cache.")
-      // restore cache at clicked node
+      console.debug("Restoring cache at node " + clicked.id + ".")
 
       if (!clicked.cache) {
         throw new
           Error("Attempted to restore nonexistent cache at node " + clicked.id)
+
       } else {
-        const update = async (n: Node) => n.id === clicked.id ? (clicked.cache as Node) : n
+        const update = async (n: Node) =>
+          n.id === clicked.id ? (clicked.cache as Node) : n
         return updateNodes(parentUpdated, update, breakAfter)
       }
+
     } else {
-      console.log("Unexplored node " + clicked.id)
+      console.debug("Clicked node " + clicked.id + " was not previously " +
+        "explored.")
+
       // change node status to selected
-      const clickedUpdated = changeStatusAtId(parentUpdated, clicked.id, 'selected')
+      const clickedUpdated =
+        changeStatusAtId(parentUpdated, clicked.id, 'selected')
 
       const update = async (n: Node) => n.id === clicked.id
         ? n.kind === 'goal'
-          ? { ...await getApplicableTactics(n, apiData, rs), explored: true }
-          : await getSubgoals(n, apiData, rs)
+          ? { ...await getApplicableTactics(n, apiData, rs, pos), explored: true }
+          : await getSubgoals(n, apiData, rs, pos)
         : n
+
       return updateNodes(await clickedUpdated, update, breakAfter)
     }
   } else {
-    console.log("Case 3: nca " + nca.id + " clicked " + clicked.id)
+    console.debug("Clicked node " + clicked.id + " is not an ancestor of " +
+      "previously selected node and vice versa. Nearest common ancestor: " +
+      nca.id + ".")
+
     // new node should be an immediate child of nca
     assert(nca.children.some((c: Node) => c.id === clicked.id),
       "Non-child descendant of nearest common ancestor of previously " +
@@ -90,6 +109,7 @@ async function handleClick(root: Node, apiData: APIData, clicked: Node, rs: RpcS
       n.id === clicked.id
         ? ({ ...n, status: 'selected', explored: true } as Node)
         : n
+
     const breakAfterClicked = (n: Node) => n.id === clicked.id
     return updateNodes(root, updateClicked, breakAfterClicked)
   }
@@ -138,32 +158,46 @@ function APINodeToNode(n: APINode): Node {
 
 // given a goal node, returns the same node with
 // applicable tactics added as children
-async function getApplicableTactics(n: Node, apiData: APIData, rs: RpcSessionAtPos): Promise<Node> {
+async function getApplicableTactics(
+  n: Node,
+  apiData: APIData,
+  rs: RpcSessionAtPos,
+  pos: DocumentPosition): Promise<Node> {
+
   assert(n.kind == 'goal',
     "Called getApplicableTactics on tactic node " + n.id)
 
-  const params = { id: n.id, apiData: apiData }
-  const tactics: APINode[] = await rs.call("Backend.getApplicableTactics", params)
+  // get tactic list
+  const params = { id: n.id, apiData: apiData, pos: pos }
+  const tactics: APINode[] =
+    await rs.call("Backend.getApplicableTactics", params)
   const tsxTactics = tactics.map(APINodeToNode)
+
   return { ...n, children: tsxTactics }
 }
 
 // given a tactic node, returns the same node with
 // subgoals added as children
-async function getSubgoals(n: Node, apiData: APIData, rs: RpcSessionAtPos): Promise<Node> {
-  assert(n.kind == 'tactic',
-    "Called getSubgoals on goal node " + n.id)
+async function getSubgoals(
+  n: Node,
+  apiData: APIData,
+  rs: RpcSessionAtPos,
+  pos: DocumentPosition): Promise<Node> {
 
-  const params = { id: n.id, apiData: apiData }
+  assert(n.kind == 'tactic', "Called getSubgoals on goal node " + n.id)
+
+  // get subgoal list
+  const params = { id: n.id, apiData: apiData, pos: pos }
   const subgoals: APINode[] = await rs.call("Backend.getSubgoals", params)
   const tsxGoals = subgoals.map(APINodeToNode)
+
   return { ...n, children: tsxGoals }
 }
 
 /* React */
 
 function renderNode(n: Node, onClick: (clicked: Node) => Promise<void>): React.ReactNode {
-  console.log("Rendering " + n.id)
+  console.info("Rendering node" + n.id)
   if (!n.visible) {
     return
   }
@@ -194,16 +228,36 @@ type HoverflyProps = PanelWidgetProps & {
 // All RPC requests are relative to an open file and an RPC session for that file.
 // The client must first connect to the session using $/lean/rpc/connect
 function Hoverfly(props: HoverflyProps) {
-  const [root, setRoot] = useState<Node>(APINodeToNode(props.root))
+  const [root, setRoot] = useState<Node | null>(null)
   // const [apiData, setAPIData] = useState<APIData>(props.apiData)
+
   const rs = useRpcSession()
 
-  const onClick = async (n: Node) => {
-    console.log("Clicked " + n.id)
+  if (root === null) {
+    // update root selected status
+    const selectedRoot = selectRoot(APINodeToNode(props.root))
 
-    setRoot(await handleClick(root, props.apiData, n, rs))
+    // update root children
+    const rootWithChildren = useAsync(() =>
+      getApplicableTactics(selectedRoot,
+        props.apiData, rs, props.pos))
+
+    if (rootWithChildren.state === 'resolved') {
+
+      setRoot(rootWithChildren.value)
+    } else {
+      console.error("Call for children of root node not resolved.")
+      // TODO: error behavior?
+    }
+  } else {
+    const onClick = async (n: Node) => {
+      console.info("Clicked node " + n.id)
+
+      setRoot(await handleClick(root, props.apiData, n, rs, props.pos))
+    }
+    return <><HoverflyTree root={root} onClick={onClick} /></>
   }
-  return <><HoverflyTree root={root} onClick={onClick} /></>
+
 }
 
 export default Hoverfly

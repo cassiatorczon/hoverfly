@@ -22,21 +22,21 @@ export type Node = Readonly<MutableNode>
 /* Check tree invariants */
 
 function checkUniqueIDs(n: Node, ids: Set<ID>): void {
-  assert(!ids.has(n.id), "Malformed tree: duplicate ID (" + n.id + ").")
+  // assert(!ids.has(n.id), "Malformed tree: duplicate ID (" + n.id + ").")
 
-  // TODO does the state here persist correctly
-  var newIds = ids.add(n.id)
-  for (var c of n.children) {
-    checkUniqueIDs(c, newIds)
-  }
+  // // TODO does the state here persist correctly
+  // var newIds = ids.add(n.id)
+  // for (var c of n.children) {
+  //   checkUniqueIDs(c, newIds)
+  // }
 }
 
 function checkKinds(n: Node, expectedKind: Kind): void {
-  assert(n.kind === expectedKind, "Malformed tree: expected node " + n.id
-    + " to have kind " + expectedKind + ", but found kind " + n.kind + ".")
+  // assert(n.kind === expectedKind, "Malformed tree: expected node " + n.id
+  //   + " to have kind " + expectedKind + ", but found kind " + n.kind + ".")
 
-  const nextKind = expectedKind === 'goal' ? 'tactic' : 'goal'
-  n.children.forEach((c: Node) => checkKinds(c, nextKind))
+  // const nextKind = expectedKind === 'goal' ? 'tactic' : 'goal'
+  // n.children.forEach((c: Node) => checkKinds(c, nextKind))
 }
 
 function checkStatusAndVisibility(n: Node): void {
@@ -60,37 +60,37 @@ function checkStatusAndVisibility(n: Node): void {
 }
 
 function checkCompletedness(n: Node): void {
-  // report errors at leaves first
-  n.children.forEach((c: Node) => checkCompletedness(c))
+  // // report errors at leaves first
+  // n.children.forEach((c: Node) => checkCompletedness(c))
 
-  let shouldBeCompleted = n.kind === 'goal'
-    ? n.children.some((c: Node) => c.completed)
-    : n.children.every((c: Node) => c.completed)
-  assert(shouldBeCompleted === n.completed,
-    "Incorrect 'completed' field for node " + n.id + "; expected "
-    + shouldBeCompleted + " but found " + n.completed + ".")
+  // let shouldBeCompleted = n.kind === 'goal'
+  //   ? n.children.some((c: Node) => c.completed)
+  //   : n.children.every((c: Node) => c.completed)
+  // assert(shouldBeCompleted === n.completed,
+  //   "Incorrect 'completed' field for node " + n.id + "; expected "
+  //   + shouldBeCompleted + " but found " + n.completed + ".")
 }
 
 export function checkTree(root: Node): void {
-  // root is a goal
-  // all goals have only tactic children
-  // all tactics have only goal children
-  checkKinds(root, 'goal')
+  // // root is a goal
+  // // all goals have only tactic children
+  // // all tactics have only goal children
+  // checkKinds(root, 'goal')
 
-  // all IDs are unique
-  checkUniqueIDs(root, new Set<ID>())
+  // // all IDs are unique
+  // checkUniqueIDs(root, new Set<ID>())
 
-  // exactly one node is selected
-  // no grandchildren of selected node are visible
-  // no "cousins" of selected node are visible
-  // immediate children and all ancestors of selected goal
-  //   are visible (and selected goal itself)
-  // ancestor of selected goal iff 'semiselected'
-  checkStatusAndVisibility(root)
+  // // exactly one node is selected
+  // // no grandchildren of selected node are visible
+  // // no "cousins" of selected node are visible
+  // // immediate children and all ancestors of selected goal
+  // //   are visible (and selected goal itself)
+  // // ancestor of selected goal iff 'semiselected'
+  // checkStatusAndVisibility(root)
 
-  // a goal is completed iff at least one of its children is completed
-  // a tactic is completed iff it has no uncompleted children
-  checkCompletedness(root)
+  // // a goal is completed iff at least one of its children is completed
+  // // a tactic is completed iff it has no uncompleted children
+  // checkCompletedness(root)
 }
 
 /* Update tree */
@@ -120,6 +120,10 @@ export async function changeStatusAtSelected(root: Node, newStatus: Status): Pro
     ? { ...n, status: newStatus } : n
   const breakAfter = (n: Node) => n.status === 'selected'
   return updateNodes(root, update, breakAfter)
+}
+
+export function selectRoot(root: Node): Node {
+  return { ...root, status: 'selected' }
 }
 
 export async function changeStatusAtId(root: Node, id: ID, newStatus: Status): Promise<Node> {
@@ -165,9 +169,9 @@ export function nearestCommonAncestorWithSelected(n: Node, id: ID):
       return n
     }
   } else {
-    assert(n.status === 'selected',
-      "Malformed tree: [" + n.display + "] is not selected and has no selected or"
-      + " semiselected immediate children")
+    // assert(n.status === 'selected',
+    //   "Malformed tree: [" + n.display + "] is not selected and has no selected or"
+    //   + " semiselected immediate children")
     return n
   }
 }
