@@ -18,54 +18,6 @@ structure APINode where
   display : String
   deriving ToJson, FromJson
 
-structure GetInitialStateParams where
-  goals : Array Widget.InteractiveGoal --TODO
-  pos : Lsp.Position --TODO
-  deriving RpcEncodable
-
-
-/--
-Gets initial goal state.
-Stores a proof state server-side and returns a reference to it.
--/
-@[server_rpc_method]
-def getInitialState
-  (_params : GetInitialStateParams)
-  : RequestM (RequestTask (APINode × WithRpcRef State)) :=
-  RequestM.withWaitFindSnapAtPos _params.pos fun snap => do
-    RequestM.runTermElabM snap do
-      match _params.goals[0]? with
-      | some goal =>
-        -- get root goal API info
-        let display : String := toString goal.pretty
-        let rootGoal : APINode :=
-          {isGoal := true, id := 0, display := display}
-
-        -- get proof state and mvarId at root goal
-        let rootProofState ← liftM (saveState : Lean.Elab.TermElabM _)
-        let rootMVarId := goal.mvarId
-
-        -- initialize map of goal ids to MVarIds and States
-        let initialGoalMap := Std.HashMap.ofList [
-          (rootGoal.id, (rootMVarId, rootProofState))
-          ]
-
-        -- initialize state
-        let initialState : State := {
-            nodeCounter := rootGoal.id + 1,
-            goalMap := initialGoalMap,
-            tacticMap := ∅
-          }
-
-        let ref ← WithRpcRef.mk initialState
-        return (rootGoal, ref)
-      | none =>
-        --TODO error behavior
-        let badRef ←
-          WithRpcRef.mk {nodeCounter:=0, goalMap:=∅,tacticMap:=∅}
-        return ({isGoal := false, id:=0,display:="err"}, badRef)
-
-
 structure GetSubgoalsParams where
   id : StateId
   stateRef : WithRpcRef State
@@ -207,39 +159,6 @@ elab stx:"hoverfly" : tactic => do
       let jsonRoot ← rpcEncode rootGoal
       let jsonApiData ← rpcEncode ref
       pure $ json% { root: $(jsonRoot) , apiData: $(jsonApiData) }) stx
-
-
-/-
-
-      match _params.goals[0]? with
-      | some goal =>
-        -- get root goal API info
-        let display : String := toString goal.pretty
-        let rootGoal : APINode :=
-          {isGoal := true, id := 0, display := display}
-
-        -- get proof state and mvarId at root goal
-        let rootProofState ← liftM (saveState : Lean.Elab.TermElabM _)
-        let rootMVarId := goal.mvarId
-
-        -- initialize map of goal ids to MVarIds and States
-        let initialGoalMap := Std.HashMap.ofList [
-          (rootGoal.id, (rootMVarId, rootProofState))
-          ]
-
-        -- initialize state
-        let initialState : State := {
-            nodeCounter := rootGoal.id + 1,
-            goalMap := initialGoalMap,
-            tacticMap := ∅
-          }
-
-        let ref ← WithRpcRef.mk initialState
-        return (rootGoal, ref)-/
-
-theorem foobar : 1 = 1 /\ 2 = 2 := by
-  hoverfly
-  sorry
 
 
 theorem demo (n m : Nat) : n <= m → ∃ x, m = x + n := by
