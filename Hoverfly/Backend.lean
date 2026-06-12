@@ -123,14 +123,6 @@ def getApplicableTactics
 def checkWidget : Widget.Module where
   javascript := include_str ".."/".lake"/"build"/"js"/"Hoverfly.js"
 
--- open Lean.Elab.Tactic in
--- def myTactic : Tactic := λ stx => do
---   -- let env <- getEnv
---   let g <- Elab.Tactic.getMainGoal -- means myTactic must
---   g.withContext do
-
--- --   return
-
 open scoped Json in
 elab stx:"hoverfly" : tactic => do
   let rootProofState ← liftM (saveState : Lean.Elab.TermElabM _)
