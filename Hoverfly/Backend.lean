@@ -110,6 +110,19 @@ def getApplicableTactics
         -- get all tactics
         let ts ← tacticList
 
+        -- filter for tactics that succeed on the goal
+        let succeeds t : RequestT Elab.TermElabM Bool := do
+          liftM (restoreState proofState : Lean.Elab.TermElabM Unit)
+
+          -- run tactic
+          try
+            let _ <- Lean.Elab.Tactic.run mvarId do
+              Lean.Elab.Tactic.evalTactic t
+            return true
+          catch _ => return false
+        let succeedingTactics ← List.filterM succeeds ts
+        liftM (restoreState proofState : Lean.Elab.TermElabM Unit)
+
         -- add each new tactic to map and return nodes and updated counter
         let f t stx := match t with
           | (nodes, tempTacticMap, c) =>
@@ -119,7 +132,7 @@ def getApplicableTactics
             let newMap := tempTacticMap.insert c tacticInfo
             (apiNode :: nodes, newMap, c + 1)
         let (tactics, newTacticMap, newCounter) :=
-          ts.foldl f ([], tacticMap, nodeCounter)
+          succeedingTactics.foldl f ([], tacticMap, nodeCounter)
 
         -- update state
         let newState ← WithRpcRef.mk {
