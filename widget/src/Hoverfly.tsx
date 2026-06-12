@@ -1,6 +1,21 @@
 import { Fragment, useState, useContext } from 'react'
-import { useRpcSession, useAsync, mapRpcError, RpcSessionAtPos, EditorContext, PanelWidgetProps, EditorConnection, DocumentPosition } from '@leanprover/infoview';
-import { DocumentUri, Position, Range, TextDocumentEdit, TextDocumentIdentifier, TextEdit } from "vscode-languageserver-protocol";
+import {
+  useRpcSession,
+  useAsync,
+  mapRpcError,
+  RpcSessionAtPos,
+  EditorContext,
+  PanelWidgetProps,
+  EditorConnection, DocumentPosition
+} from '@leanprover/infoview';
+import {
+  DocumentUri,
+  Position,
+  Range,
+  TextDocumentEdit,
+  TextDocumentIdentifier,
+  TextEdit
+} from "vscode-languageserver-protocol";
 import {
   Node,
   assert,
@@ -212,7 +227,8 @@ async function getSubgoals(
 
 /* React */
 
-function renderNode(n: Node, onClick: (clicked: Node) => Promise<void>): React.ReactNode {
+function renderNode(n: Node, onClick: (clicked: Node) => Promise<void>)
+  : React.ReactNode {
   console.info("Rendering node" + n.id)
   if (!n.visible) {
     return
@@ -220,12 +236,16 @@ function renderNode(n: Node, onClick: (clicked: Node) => Promise<void>): React.R
 
   return (
     <Fragment key={n.id}>
-      <li onClick={() => onClick(n)}>{n.display} [{n.status}, {n.explored}, {n.id}, {n.kind}]</li>
+      <li onClick={() => onClick(n)}>
+        {n.display} [{n.status}, {n.explored}, {n.id}, {n.kind}]</li>
       <ul> {n.children.map((child: Node) => renderNode(child, onClick))}</ul >
     </Fragment>)
 }
 
-function HoverflyTree({ root, onClick }: { root: Node, onClick: (n: Node) => Promise<void> },) {
+function HoverflyTree({ root, onClick }: {
+  root: Node, onClick: (n: Node) =>
+    Promise<void>
+},) {
   return (
     <>
       <ul>
@@ -241,7 +261,8 @@ type HoverflyProps = PanelWidgetProps & {
 }
 
 // TODO -- Docs for WithRpcRef say:
-// All RPC requests are relative to an open file and an RPC session for that file.
+// All RPC requests are relative to an open file and an RPC session for that
+// file.
 // The client must first connect to the session using $/lean/rpc/connect
 function Hoverfly(props: HoverflyProps) {
   const rs = useRpcSession()
@@ -267,7 +288,8 @@ function Hoverfly(props: HoverflyProps) {
 
   const onClick = async (n: Node) => {
     console.info("Clicked node " + n.id)
-    setSaved(await handleClick(current.node, current.stateRef, n, rs, props.pos))
+    setSaved(
+      await handleClick(current.node, current.stateRef, n, rs, props.pos))
   }
   return <><HoverflyTree root={current.node} onClick={onClick} /></>
 }

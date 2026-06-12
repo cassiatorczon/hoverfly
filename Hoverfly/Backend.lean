@@ -50,7 +50,8 @@ def getSubgoals
             Lean.Elab.Tactic.evalTactic stx
 
           -- add each new goal to map and return nodes and updated counter
-          let newProofState ← liftM (saveState : Lean.Elab.TermElabM Lean.Elab.Term.SavedState)
+          let newProofState ←
+            liftM (saveState : Lean.Elab.TermElabM Lean.Elab.Term.SavedState)
           let f t mvarId := match t with
             | (nodes, tempGoalMap, c) =>
               let apiNode : APINode :=
@@ -78,6 +79,20 @@ structure GetApplicableTacticsParams where
   pos : Lsp.Position
   deriving RpcEncodable
 
+-- TODO
+def tacticList : Elab.TermElabM (List Syntax) := do
+  let tac_rfl ← `(tactic | rfl) --TODO
+  let tac_and ← `(tactic | apply And.intro)
+  let tac_intros ← `(tactic | intros)
+  let tac_assumption ← `(tactic | assumption)
+  let tac_contradiction ← `(tactic | contradiction)
+
+  let tac_lem ← `(tactic | apply Nat.exists_eq_add_of_le')
+
+  return List.map Lean.TSyntax.raw
+    [tac_rfl, tac_and, tac_intros, tac_assumption, tac_contradiction
+    ]
+
 @[server_rpc_method]
 def getApplicableTactics
   (_params : GetApplicableTacticsParams)
@@ -93,15 +108,13 @@ def getApplicableTactics
       | some (mvarId, proofState) =>
 
         -- get all tactics
-        let tac_rfl ← `(tactic | rfl) --TODO
-        let tac_and ← `(tactic | apply And.intro)
-        let ts : List Syntax := [tac_rfl.raw, tac_and.raw]
+        let ts ← tacticList
 
         -- add each new tactic to map and return nodes and updated counter
         let f t stx := match t with
           | (nodes, tempTacticMap, c) =>
             let apiNode : APINode :=
-              {isGoal := false, id := c, display := stx.prettyPrint.pretty'} --TODO
+              {isGoal := false, id := c, display := stx.prettyPrint.pretty'}
             let tacticInfo := (stx, _params.id)
             let newMap := tempTacticMap.insert c tacticInfo
             (apiNode :: nodes, newMap, c + 1)
@@ -154,8 +167,12 @@ elab stx:"hoverfly" : tactic => do
 
 
 theorem demo (n m : Nat) : n <= m → ∃ x, m = x + n := by
+  intros
+  exists (m - n)
+  rw [Nat.sub_add_cancel]
+  assumption
 -- Proof 1:
-  apply Nat.exists_eq_add_of_le'
+  -- apply Nat.exists_eq_add_of_le'
 -- Proof 2:
   --  intros
   --  apply Nat.exists_eq_add_of_le'
