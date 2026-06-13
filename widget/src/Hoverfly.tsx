@@ -1,4 +1,4 @@
-import { useState, useContext } from 'react'
+import { useState, useEffect, useContext } from 'react'
 import {
   useRpcSession,
   useAsync,
@@ -284,9 +284,11 @@ function Hoverfly(props: HoverflyProps) {
       selectRoot(APINodeToNode(props.root)), props.apiData, rs, props.pos),
     [props.root, props.apiData, rs, props.pos])
 
-  // NOTE: Once set, this overrides the root from async. That's intended (async
-  // is for initialization), but could be annoying later if it isn't.
   const [saved, setSaved] = useState<NodeAndStateRef | null>(null)
+
+  // Drop cached state on re-elaboration
+  useEffect(() => { setSaved(null) }, [props.apiData, props.pos, rs])
+
   const current = saved ?? (loaded.state === 'resolved' ? loaded.value : null)
 
   if (current === null) {
