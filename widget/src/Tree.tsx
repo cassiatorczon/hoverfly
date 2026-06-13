@@ -153,14 +153,9 @@ export function recomputeCompleted(n: Node): Node {
 
   let completed: boolean
   if (children.length === 0 && cache) {
-    // Node is collapsed: its real subtree lives in the cache. Whether it still
-    // counts toward completion depends on *why* it was collapsed:
-    //   - a collapsed goal is a required subgoal we set aside to work on a
-    //     sibling subgoal; it is still part of the proof being assembled, so it
-    //     keeps its (cached) completion.
-    //   - a collapsed tactic is an alternative we explored and then moved away
-    //     from; it is no longer part of the live proof, so it does not count.
-    // (Restoring the cache brings the children back and recomputes from them.)
+    // A cached goal is completed if the cached tree is completed; a cached
+    // tactic is _never_ completed, since caching it means we've moved away
+    // from it.
     completed = n.kind === 'goal' ? cache.completed : false
   } else if (n.kind === 'tactic') {
     completed = n.explored && children.every((c: Node) => c.completed)
