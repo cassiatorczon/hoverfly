@@ -1,4 +1,4 @@
-import { Fragment, useState, useContext } from 'react'
+import { useState, useContext } from 'react'
 import {
   useRpcSession,
   useAsync,
@@ -26,7 +26,7 @@ import {
   changeStatusAtId,
   selectRoot
 } from './Tree'
-// import './App.css'
+import hoverflyStyles from './styles.css'
 
 /* Handler */
 
@@ -229,17 +229,26 @@ async function getSubgoals(
 
 function renderNode(n: Node, onClick: (clicked: Node) => Promise<void>)
   : React.ReactNode {
-  console.info("Rendering node" + n.id)
   if (!n.visible) {
-    return
+    return null
   }
 
+  const marker = n.kind === 'goal' ? '⊢' : '▸'
+
   return (
-    <Fragment key={n.id}>
-      <li onClick={() => onClick(n)}>
-        {n.display} [{n.status}, {n.explored}, {n.id}, {n.kind}]</li>
-      <ul> {n.children.map((child: Node) => renderNode(child, onClick))}</ul >
-    </Fragment>)
+    <li key={n.id}>
+      <div className={`rowA ${n.kind} ${n.status}`} onClick={() => onClick(n)}>
+        <span className="marker">{marker}</span>
+        <span className="disp">{n.display}</span>
+        {n.completed && <span className="badge-done">✓</span>}
+        <span className="id">#{n.id}</span>
+      </div>
+      {n.children.length > 0 &&
+        <ul className="kids">
+          {n.children.map((child: Node) => renderNode(child, onClick))}
+        </ul>}
+    </li>
+  )
 }
 
 function HoverflyTree({ root, onClick }: {
@@ -247,11 +256,14 @@ function HoverflyTree({ root, onClick }: {
     Promise<void>
 },) {
   return (
-    <>
-      <ul>
-        {renderNode(root, onClick)}
-      </ul>
-    </>
+    <div className="hf">
+      <style>{hoverflyStyles}</style>
+      <div className="treeA">
+        <ul>
+          {renderNode(root, onClick)}
+        </ul>
+      </div>
+    </div>
   )
 }
 
