@@ -48,12 +48,14 @@ function renderNode(n: Node, onClick: (clicked: Node) => Promise<void>)
         <span className="disp">{n.display}</span>
         {n.cache
           ? (n.cache.completed
-            ? <span className="badge-cached-done"
-                title="Cached — a completed proof is stored here">★</span>
+            ? (n.kind === 'goal'
+              ? <span className="badge-done" title="Completed">✓</span>
+              : <span className="badge-cached-done"
+                title="A completed proof is stored here — go back to finish">★</span>)
             : <span className="badge-cached"
-                title="Cached — progress stored, no full proof yet">☆</span>)
+              title="Cached — progress stored, no full proof yet">☆</span>)
           : n.completed
-            ? <span className="badge-done">✓</span>
+            ? <span className="badge-done" title="Completed">✓</span>
             : n.explored
               ? <span className="badge-explored" title="Already explored">•</span>
               : null}
