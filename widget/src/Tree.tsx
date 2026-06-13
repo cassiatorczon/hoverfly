@@ -145,25 +145,23 @@ export function cacheChild(n: Node): Node {
 }
 
 // Recompute the `completed` flag for every node from the structure of the
-// tree, bottom-up. Completion is derived (not load-bearing for click logic),
-// so we recompute a fresh display copy rather than mutating in place.
-//
-//   - a tactic is completed iff it has been explored and every resulting
-//     subgoal is completed (vacuously true when it produced no subgoals, i.e.
-//     the tactic closed its goal)
-//   - a goal is completed iff some applicable tactic completes it
-//
-// The root is a goal, so `recomputeCompleted(root).completed` is true exactly
-// when a full proof has been found in the explorer.
+// tree. Completion is derived rather than stored, to keep us from having to
+// maintain it at every node separately.
 export function recomputeCompleted(n: Node): Node {
   const children = n.children.map(recomputeCompleted)
   const cache = n.cache ? recomputeCompleted(n.cache) : undefined
 
   let completed: boolean
   if (children.length === 0 && cache) {
-    // node is collapsed: its real subtree lives in the cache, so its
-    // completion is whatever the cached subtree's completion is
-    completed = cache.completed
+    // Node is collapsed: its real subtree lives in the cache. Whether it still
+    // counts toward completion depends on *why* it was collapsed:
+    //   - a collapsed goal is a required subgoal we set aside to work on a
+    //     sibling subgoal; it is still part of the proof being assembled, so it
+    //     keeps its (cached) completion.
+    //   - a collapsed tactic is an alternative we explored and then moved away
+    //     from; it is no longer part of the live proof, so it does not count.
+    // (Restoring the cache brings the children back and recomputes from them.)
+    completed = n.kind === 'goal' ? cache.completed : false
   } else if (n.kind === 'tactic') {
     completed = n.explored && children.every((c: Node) => c.completed)
   } else {

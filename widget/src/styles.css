@@ -74,14 +74,18 @@
   font-size: 11px;
 }
 
-/* explored-but-collapsed: reopening restores from cache (no server call) */
 .hf .rowA .badge-cached {
   color: var(--cached);
   flex: none;
   font-size: 11px;
 }
 
-/* explored on the live branch: visited, but not collapsed into a cache */
+.hf .rowA .badge-cached-done {
+  color: var(--done);
+  flex: none;
+  font-size: 11px;
+}
+
 .hf .rowA .badge-explored {
   color: var(--vscode-disabledForeground);
   flex: none;

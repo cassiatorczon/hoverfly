@@ -46,11 +46,17 @@ function renderNode(n: Node, onClick: (clicked: Node) => Promise<void>)
       <div className={`rowA ${n.kind} ${n.status}`} onClick={() => onClick(n)}>
         <span className="marker">{marker}</span>
         <span className="disp">{n.display}</span>
-        {n.completed && <span className="badge-done">✓</span>}
         {n.cache
-          ? <span className="badge-cached" title="Cached — reopens instantly">⚡</span>
-          : n.explored &&
-            <span className="badge-explored" title="Already explored">•</span>}
+          ? (n.cache.completed
+            ? <span className="badge-cached-done"
+                title="Cached — a completed proof is stored here">★</span>
+            : <span className="badge-cached"
+                title="Cached — progress stored, no full proof yet">☆</span>)
+          : n.completed
+            ? <span className="badge-done">✓</span>
+            : n.explored
+              ? <span className="badge-explored" title="Already explored">•</span>
+              : null}
         <span className="id">#{n.id}</span>
       </div>
       {n.children.length > 0 &&

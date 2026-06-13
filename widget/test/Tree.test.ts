@@ -91,6 +91,21 @@ test('recomputeCompleted: proof completes through a collapsed sibling', () => {
   assert.equal(recomputeCompleted(root).completed, true)
 })
 
+test('recomputeCompleted: a collapsed tactic alternative does not count', () => {
+  // goal -> [ collapsed+completed tactic (an abandoned alternative), live tactic ]
+  // Moving away from a completing tactic collapses it into its cache; it should
+  // no longer keep the goal (and thus the root) completed.
+  const collapsedAlt = tactic(1, 'rfl', {
+    explored: true, children: [],
+    cache: tactic(1, 'rfl', { explored: true, children: [] })
+  })
+  const liveAlt = tactic(2, 'simp', { explored: false })
+  const root = goal(0, 'g', {
+    status: 'selected', children: [collapsedAlt, liveAlt]
+  })
+  assert.equal(recomputeCompleted(root).completed, false)
+})
+
 /* cacheChild / cacheIfSelected */
 
 test('cacheChild: collapses selected and semiselected children only', () => {
