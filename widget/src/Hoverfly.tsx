@@ -24,7 +24,8 @@ import {
   updateNodes,
   changeStatusAtSelected,
   changeStatusAtId,
-  selectRoot
+  selectRoot,
+  recomputeCompleted
 } from './Tree'
 import hoverflyStyles from './styles.css'
 
@@ -106,9 +107,7 @@ async function handleClick(
           ? await getApplicableTactics(n, stateRef, rs, pos)
           : await getSubgoals(n, stateRef, rs, pos)
         newStateRef = expanded.stateRef
-        return n.kind === 'goal'
-          ? { ...expanded.node, explored: true }
-          : expanded.node
+        return { ...expanded.node, explored: true }
       }
 
       return {
@@ -164,9 +163,7 @@ async function handleClick(
           ? await getApplicableTactics(n, stateRef, rs, pos)
           : await getSubgoals(n, stateRef, rs, pos)
         newStateRef = expanded.stateRef
-        return n.kind === 'goal'
-          ? { ...expanded.node, explored: true }
-          : expanded.node
+        return { ...expanded.node, explored: true }
       }
 
       return {
@@ -290,6 +287,10 @@ function HoverflyTree({ root, onClick }: {
   return (
     <div className="hf">
       <style>{hoverflyStyles}</style>
+      {root.completed &&
+        <div className="banner-done">
+          ✓ Proof complete — a closing tactic sequence has been found.
+        </div>}
       <div className="treeA">
         <ul>
           {renderNode(root, onClick)}
@@ -337,7 +338,9 @@ function Hoverfly(props: HoverflyProps) {
     setSaved(
       await handleClick(current.node, current.stateRef, n, rs, props.pos))
   }
-  return <><HoverflyTree root={current.node} onClick={onClick} /></>
+
+  const displayRoot = recomputeCompleted(current.node)
+  return <><HoverflyTree root={displayRoot} onClick={onClick} /></>
 }
 
 export default Hoverfly

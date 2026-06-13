@@ -144,6 +144,35 @@ export function cacheChild(n: Node): Node {
   return { ...n, children: newChildren }
 }
 
+// Recompute the `completed` flag for every node from the structure of the
+// tree, bottom-up. Completion is derived (not load-bearing for click logic),
+// so we recompute a fresh display copy rather than mutating in place.
+//
+//   - a tactic is completed iff it has been explored and every resulting
+//     subgoal is completed (vacuously true when it produced no subgoals, i.e.
+//     the tactic closed its goal)
+//   - a goal is completed iff some applicable tactic completes it
+//
+// The root is a goal, so `recomputeCompleted(root).completed` is true exactly
+// when a full proof has been found in the explorer.
+export function recomputeCompleted(n: Node): Node {
+  const children = n.children.map(recomputeCompleted)
+  const cache = n.cache ? recomputeCompleted(n.cache) : undefined
+
+  let completed: boolean
+  if (children.length === 0 && cache) {
+    // node is collapsed: its real subtree lives in the cache, so its
+    // completion is whatever the cached subtree's completion is
+    completed = cache.completed
+  } else if (n.kind === 'tactic') {
+    completed = n.explored && children.every((c: Node) => c.completed)
+  } else {
+    completed = children.some((c: Node) => c.completed)
+  }
+
+  return { ...n, children, cache, completed }
+}
+
 /* Get tree info */
 
 function isNonstrictAncestorOf(parentCand: Node, childId: ID)
