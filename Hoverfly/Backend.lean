@@ -24,6 +24,19 @@ structure GetSubgoalsParams where
   pos : Lsp.Position
   deriving RpcEncodable
 
+-- TODO there's got to be a better function for this already
+def showGoal (mvarId : MVarId) : MetaM String := do
+  let ppCtxt : PPContext := {
+    env := (← getEnv),
+    mctx := (← getMCtx),
+    lctx := (← getLCtx),
+    opts := (← getOptions),
+    currNamespace := (← getCurrNamespace),
+    openDecls := (← getOpenDecls)
+    }
+  let format ← ppGoal ppCtxt mvarId
+  return format.pretty
+
 @[server_rpc_method]
 def getSubgoals
   (_params : GetSubgoalsParams)
@@ -53,14 +66,15 @@ def getSubgoals
           let newProofState ←
             liftM (saveState : Lean.Elab.TermElabM Lean.Elab.Term.SavedState)
           let f t mvarId := match t with
-            | (nodes, tempGoalMap, c) =>
+            | (nodes, tempGoalMap, c) => do
+              let goalPretty ← showGoal mvarId
               let apiNode : APINode :=
-                {isGoal := true, id := c, display :="todo"}
+                {isGoal := true, id := c, display := goalPretty}
               let goalInfo := (mvarId, newProofState)
               let newMap := tempGoalMap.insert c goalInfo
-              (apiNode :: nodes, newMap, c + 1)
-          let (goals, newGoalMap, newCounter) :=
-            result.foldl f ([], goalMap, nodeCounter)
+              return (apiNode :: nodes, newMap, c + 1)
+          let (goals, newGoalMap, newCounter) ←
+            result.foldlM f ([], goalMap, nodeCounter)
 
           -- update state
           let newState ← WithRpcRef.mk {
@@ -87,10 +101,16 @@ def tacticList : Elab.TermElabM (List Syntax) := do
   let tac_assumption ← `(tactic | assumption)
   let tac_contradiction ← `(tactic | contradiction)
 
-  let tac_lem ← `(tactic | apply Nat.exists_eq_add_of_le')
+  let tac_simp_all ← `(tactic | simp_all)
+  let tac_very_long ← `(tactic | skip <;> skip <;> skip <;> skip <;> skip <;> skip)
+
+  let tac_subst_eqs ← `(tactic | subst_eqs)
+  let tac_intro ← `(tactic | intro)
+  let tac_rw_eq_comm ← `(tactic | rw [Eq.comm])
 
   return List.map Lean.TSyntax.raw
-    [tac_rfl, tac_and, tac_intros, tac_assumption, tac_contradiction
+    [tac_rfl, tac_and, tac_intros, tac_assumption, tac_contradiction,
+      tac_simp_all, tac_very_long, tac_subst_eqs, tac_intro, tac_rw_eq_comm
     ]
 
 @[server_rpc_method]
@@ -110,7 +130,7 @@ def getApplicableTactics
         -- get all tactics
         let ts ← tacticList
 
-        -- filter for tactics that succeed on the goal
+        -- filter for tactics that don't fail on the goal
         let succeeds t : RequestT Elab.TermElabM Bool := do
           liftM (restoreState proofState : Lean.Elab.TermElabM Unit)
 
@@ -127,7 +147,7 @@ def getApplicableTactics
         let f t stx := match t with
           | (nodes, tempTacticMap, c) =>
             let apiNode : APINode :=
-              {isGoal := false, id := c, display := stx.prettyPrint.pretty'}
+              {isGoal := false, id := c, display := stx.prettyPrint.pretty}
             let tacticInfo := (stx, _params.id)
             let newMap := tempTacticMap.insert c tacticInfo
             (apiNode :: nodes, newMap, c + 1)
@@ -178,12 +198,23 @@ elab stx:"hoverfly" : tactic => do
       let jsonApiData ← rpcEncode ref
       pure $ json% { root: $(jsonRoot) , apiData: $(jsonApiData) }) stx
 
+theorem foobar : 1 = 1 /\ 2 = 2 := by
+  hoverfly
+  sorry
+
+theorem demo_simple (very_very_long_variable_name : Nat) :
+  very_very_long_variable_name = 1 ->
+  ¬(very_very_long_variable_name = 2) /\ 1 = very_very_long_variable_name := by
+  hoverfly
+  sorry
 
 theorem demo (n m : Nat) : n <= m → ∃ x, m = x + n := by
-  intros
-  exists (m - n)
-  rw [Nat.sub_add_cancel]
-  assumption
+  sorry
+-- Proof 0:
+  -- intros
+  -- exists (m - n)
+  -- rw [Nat.sub_add_cancel]
+  -- assumption
 -- Proof 1:
   -- apply Nat.exists_eq_add_of_le'
 -- Proof 2:
@@ -207,6 +238,5 @@ theorem demo (n m : Nat) : n <= m → ∃ x, m = x + n := by
   --     exists x
   --     rw [←Nat.add_assoc, Nat.add_one_inj]
   --     assumption
-  -- hoverfly
 
 end Backend
