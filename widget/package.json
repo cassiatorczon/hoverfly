@@ -7,6 +7,8 @@
     "watch-dev": "rollup --config --watch",
     "build": "npx tsc && rollup --environment NODE_ENV:production --config",
     "build-dev": "npx tsc && rollup --config",
+    "test": "node --import tsx --test test/*.test.ts",
+    "test:watch": "node --import tsx --test --watch test/*.test.ts",
     "clean": "rm -r dist/"
   },
   "exports": {
@@ -38,6 +40,7 @@
     "glob": "^11.0.0",
     "rollup": "^4.17.2",
     "tslib": "^2.5.0",
+    "tsx": "^4.22.4",
     "typescript": "^5.0.3"
   }
 }

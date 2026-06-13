@@ -24,6 +24,8 @@
     "skipLibCheck": true,
     "noEmit": false
   },
+  // Tests live in ./test and are run directly with `tsx` (see the "test" npm
+  // script), so they are intentionally outside this build's includes.
   "include": [
     "./src/*.ts",
     "./src/*.tsx"
