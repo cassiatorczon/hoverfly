@@ -1,0 +1,15 @@
+// Editor-only config so the TS language server type-checks the test files
+// (which are run directly with `tsx`, see the "test" npm script) using the
+// same settings as the build. Not used by `npm run build`.
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "..",
+    "noEmit": true
+  },
+  "include": [
+    "./**/*.ts",
+    "../src/**/*.ts",
+    "../src/**/*.tsx"
+  ]
+}

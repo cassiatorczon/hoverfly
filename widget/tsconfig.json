@@ -22,7 +22,10 @@
     "isolatedModules": true,
     /* Completeness */
     "skipLibCheck": true,
-    "noEmit": false
+    "noEmit": false,
+    "types": [
+      "node"
+    ],
   },
   // Tests live in ./test and are run directly with `tsx` (see the "test" npm
   // script), so they are intentionally outside this build's includes.
