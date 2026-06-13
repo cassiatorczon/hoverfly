@@ -126,21 +126,53 @@ async function handleClick(
       "Non-child descendant of nearest common ancestor of previously " +
       "selected node and newly clicked node node should not be clickable.")
 
-    // cache branch corresponding to previous node
+    // cache the previously-selected branch under nca. nca itself stays
+    // semiselected (it remains an ancestor of the newly selected node); only
+    // its selected/semiselected child is collapsed into a cache.
     const newNca = cacheChild(nca)
     const updateNca = async (n: Node) => n.id === nca.id ? newNca : n
     const breakAfterNca = (n: Node) => n.id === nca.id
-    const newGoal = updateNodes(root, updateNca, breakAfterNca)
+    const cached = await updateNodes(root, updateNca, breakAfterNca)
 
-    const updateClicked = async (n: Node) =>
-      n.id === clicked.id
-        ? ({ ...n, status: 'selected', explored: true } as Node)
-        : n
+    // select the clicked sibling, restoring its cache if it was previously
+    // explored or otherwise fetching its children (mirrors the descend case).
+    const breakAfter = (n: Node) => n.id === clicked.id
+    if (clicked.explored) {
+      console.debug("Restoring cache at node " + clicked.id + ".")
 
-    const breakAfterClicked = (n: Node) => n.id === clicked.id
-    return {
-      node: await updateNodes(root, updateClicked, breakAfterClicked),
-      stateRef
+      if (!clicked.cache) {
+        throw new
+          Error("Attempted to restore nonexistent cache at node " + clicked.id)
+      }
+
+      const update = async (n: Node) =>
+        n.id === clicked.id ? (clicked.cache as Node) : n
+      return { node: await updateNodes(cached, update, breakAfter), stateRef }
+
+    } else {
+      console.debug("Clicked node " + clicked.id + " was not previously " +
+        "explored.")
+
+      // change node status to selected
+      const clickedUpdated =
+        await changeStatusAtId(cached, clicked.id, 'selected')
+
+      let newStateRef = stateRef
+      const update = async (n: Node) => {
+        if (n.id !== clicked.id) return n
+        const expanded = n.kind === 'goal'
+          ? await getApplicableTactics(n, stateRef, rs, pos)
+          : await getSubgoals(n, stateRef, rs, pos)
+        newStateRef = expanded.stateRef
+        return n.kind === 'goal'
+          ? { ...expanded.node, explored: true }
+          : expanded.node
+      }
+
+      return {
+        node: await updateNodes(clickedUpdated, update, breakAfter),
+        stateRef: newStateRef
+      }
     }
   }
 }
