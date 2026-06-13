@@ -3,6 +3,7 @@
   --goal: var(--vscode-charts-blue);
   --tactic: var(--vscode-charts-orange);
   --done: var(--vscode-charts-green);
+  --cached: var(--vscode-charts-yellow);
   font-size: 12.5px;
 }
 
@@ -71,6 +72,21 @@
   color: var(--done);
   flex: none;
   font-size: 11px;
+}
+
+/* explored-but-collapsed: reopening restores from cache (no server call) */
+.hf .rowA .badge-cached {
+  color: var(--cached);
+  flex: none;
+  font-size: 11px;
+}
+
+/* explored on the live branch: visited, but not collapsed into a cache */
+.hf .rowA .badge-explored {
+  color: var(--vscode-disabledForeground);
+  flex: none;
+  font-size: 10px;
+  opacity: .6;
 }
 
 .hf .rowA .id {

@@ -47,6 +47,10 @@ function renderNode(n: Node, onClick: (clicked: Node) => Promise<void>)
         <span className="marker">{marker}</span>
         <span className="disp">{n.display}</span>
         {n.completed && <span className="badge-done">✓</span>}
+        {n.cache
+          ? <span className="badge-cached" title="Cached — reopens instantly">⚡</span>
+          : n.explored &&
+            <span className="badge-explored" title="Already explored">•</span>}
         <span className="id">#{n.id}</span>
       </div>
       {n.children.length > 0 &&
