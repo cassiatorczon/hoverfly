@@ -1,0 +1,144 @@
+.hf {
+  --mono: var(--vscode-editor-font-family, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace);
+  --goal: var(--vscode-charts-blue);
+  --tactic: var(--vscode-charts-orange);
+  --done: var(--vscode-charts-green);
+  --cached: var(--vscode-charts-yellow);
+  font-size: 12.5px;
+}
+
+.hf .banner-done {
+  margin: 6px 10px 0;
+  padding: 5px 9px;
+  border-radius: 5px;
+  font-weight: 600;
+  color: var(--done);
+  background: color-mix(in srgb, var(--done) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--done) 45%, transparent);
+}
+
+.hf .treeA {
+  padding: 2px 10px 6px;
+}
+
+.hf .treeA ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.hf .treeA li {
+  position: relative;
+}
+
+.hf .treeA .kids {
+  margin-left: 9px;
+  padding-left: 11px;
+  border-left: 1px solid var(--vscode-panel-border);
+}
+
+.hf .rowA {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  padding: 3px 7px;
+  margin: 1px 0;
+  border-radius: 5px;
+  cursor: pointer;
+  border-left: 2px solid transparent;
+}
+
+.hf .rowA:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.hf .rowA .marker {
+  font-family: var(--mono);
+  font-size: 11px;
+  flex: none;
+  width: 1.3em;
+  text-align: center;
+}
+
+.hf .rowA .disp {
+  font-family: var(--mono);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1 1 auto;
+}
+
+.hf .rowA .badge-done {
+  color: var(--done);
+  flex: none;
+  font-size: 11px;
+}
+
+.hf .rowA .badge-cached {
+  color: var(--cached);
+  flex: none;
+  font-size: 11px;
+}
+
+.hf .rowA .badge-cached-done {
+  color: var(--done);
+  flex: none;
+  font-size: 11px;
+}
+
+.hf .rowA .badge-explored {
+  color: var(--vscode-disabledForeground);
+  flex: none;
+  font-size: 10px;
+  opacity: .6;
+}
+
+.hf .rowA .id {
+  color: var(--vscode-disabledForeground);
+  font-size: 10px;
+  flex: none;
+  opacity: 0;
+  transition: opacity .12s;
+}
+
+.hf .rowA:hover .id {
+  opacity: 1;
+}
+
+.hf .rowA.goal .marker {
+  color: var(--goal);
+}
+
+.hf .rowA.tactic .marker {
+  color: var(--tactic);
+}
+
+.hf .rowA.tactic .disp {
+  color: var(--vscode-textLink-foreground);
+}
+
+.hf .rowA.unselected .disp {
+  color: var(--vscode-descriptionForeground);
+}
+
+.hf .rowA.semiselected {
+  border-left-color: color-mix(in srgb, var(--goal) 55%, transparent);
+}
+
+.hf .rowA.semiselected .disp {
+  color: var(--vscode-editor-foreground);
+}
+
+.hf .rowA.selected {
+  background: var(--vscode-list-activeSelectionBackground);
+  border-left-color: var(--goal);
+}
+
+.hf .rowA.selected .disp {
+  color: var(--vscode-list-activeSelectionForeground);
+  white-space: normal;
+}
+
+.hf .rowA.selected.tactic .disp {
+  color: var(--vscode-list-activeSelectionForeground);
+}

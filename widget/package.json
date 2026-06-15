@@ -7,6 +7,8 @@
     "watch-dev": "rollup --config --watch",
     "build": "npx tsc && rollup --environment NODE_ENV:production --config",
     "build-dev": "npx tsc && rollup --config",
+    "test": "node --import tsx --test test/*.test.ts",
+    "test:watch": "node --import tsx --test --watch test/*.test.ts",
     "clean": "rm -r dist/"
   },
   "exports": {
@@ -32,12 +34,14 @@
     "@rollup/plugin-commonjs": "^28.0.1",
     "@rollup/plugin-node-resolve": "^15.0.2",
     "@rollup/plugin-replace": "^6.0.1",
-    "@rollup/plugin-terser": "^0.4.0",
+    "@rollup/plugin-terser": "^1.0.0",
+    "@types/node": "^25.9.3",
     "@types/react": "^18.0.33",
     "@types/react-dom": "^18.0.11",
     "glob": "^11.0.0",
     "rollup": "^4.17.2",
     "tslib": "^2.5.0",
+    "tsx": "^4.22.4",
     "typescript": "^5.0.3"
   }
 }

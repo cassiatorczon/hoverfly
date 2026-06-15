@@ -1,10 +1,31 @@
 // from https://github.com/leanprover-community/ProofWidgets4/blob/main/widget/rollup.config.js
 
 import { glob } from 'glob';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { nodeResolve } from '@rollup/plugin-node-resolve';
 import commonjs from '@rollup/plugin-commonjs';
 import replace from '@rollup/plugin-replace';
 import terser from '@rollup/plugin-terser';
+
+// Import `.css` files as plain strings (we inject them at runtime via a
+// `<style>` tag).
+const srcDir = fileURLToPath(new URL('./src', import.meta.url));
+const cssAsString = () => ({
+    name: 'css-as-string',
+    resolveId(source) {
+        if (source.endsWith('.css')) {
+            return path.join(srcDir, path.basename(source));
+        }
+        return null;
+    },
+    transform(code, id) {
+        if (id.endsWith('.css')) {
+            return { code: `export default ${JSON.stringify(code)};`, map: { mappings: '' } };
+        }
+        return null;
+    }
+});
 
 /** @type {(_: any) => import('rollup').RollupOptions} */
 export default _cliArgs => {
@@ -29,6 +50,7 @@ export default _cliArgs => {
             '@leanprover/infoview',
         ],
         plugins: [
+            cssAsString(),
             nodeResolve({
                 browser: true
             }),

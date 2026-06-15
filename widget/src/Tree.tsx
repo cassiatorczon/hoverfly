@@ -144,6 +144,28 @@ export function cacheChild(n: Node): Node {
   return { ...n, children: newChildren }
 }
 
+// Recompute the `completed` flag for every node from the structure of the
+// tree. Completion is derived rather than stored, to keep us from having to
+// maintain it at every node separately.
+export function recomputeCompleted(n: Node): Node {
+  const children = n.children.map(recomputeCompleted)
+  const cache = n.cache ? recomputeCompleted(n.cache) : undefined
+
+  let completed: boolean
+  if (children.length === 0 && cache) {
+    // A cached goal is completed if the cached tree is completed; a cached
+    // tactic is _never_ completed, since caching it means we've moved away
+    // from it.
+    completed = n.kind === 'goal' ? cache.completed : false
+  } else if (n.kind === 'tactic') {
+    completed = n.explored && children.every((c: Node) => c.completed)
+  } else {
+    completed = children.some((c: Node) => c.completed)
+  }
+
+  return { ...n, children, cache, completed }
+}
+
 /* Get tree info */
 
 function isNonstrictAncestorOf(parentCand: Node, childId: ID)
