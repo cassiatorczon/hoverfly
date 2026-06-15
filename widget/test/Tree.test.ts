@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 
 import {
   recomputeCompleted,
+  recomputeVisible,
   cacheChild,
   nearestCommonAncestorWithSelected,
   updateNodes,
@@ -104,6 +105,66 @@ test('recomputeCompleted: a collapsed tactic alternative does not count', () => 
     status: 'selected', children: [collapsedAlt, liveAlt]
   })
   assert.equal(recomputeCompleted(root).completed, false)
+})
+
+/* recomputeVisible */
+
+test('recomputeVisible: all tactics stay visible before one is chosen', () => {
+  // The goal is selected and no tactic child is on the active path yet, so
+  // every applicable tactic should remain visible.
+  const root = goal(0, 'root', {
+    status: 'selected',
+    children: [tactic(1, 'a'), tactic(2, 'b'), tactic(3, 'c')]
+  })
+  const vis = recomputeVisible(root)
+  assert.deepEqual(vis.children.map((c) => c.visible), [true, true, true])
+})
+
+test('recomputeVisible: choosing a tactic hides uncached siblings', () => {
+  // Tactic 1 is selected; sibling 2 was explored then cached; sibling 3 was
+  // never tried. Only the never-tried sibling should be hidden.
+  const root = goal(0, 'root', {
+    status: 'semiselected',
+    children: [
+      tactic(1, 'chosen', { status: 'selected', children: [goal(4)] }),
+      tactic(2, 'cached', { status: 'unselected', cache: tactic(2, 'cached') }),
+      tactic(3, 'untried', { status: 'unselected' })
+    ]
+  })
+  const vis = recomputeVisible(root)
+  const [chosen, cached, untried] = vis.children
+  assert.equal(chosen.visible, true)
+  assert.equal(cached.visible, true)
+  assert.equal(untried.visible, false)
+})
+
+test('recomputeVisible: a semiselected tactic also hides its siblings', () => {
+  // Even when the chosen tactic is only semiselected (we descended into one of
+  // its subgoals), its uncached siblings are still hidden.
+  const root = goal(0, 'root', {
+    status: 'semiselected',
+    children: [
+      tactic(1, 'chosen', { status: 'semiselected', children: [goal(4)] }),
+      tactic(2, 'untried', { status: 'unselected' })
+    ]
+  })
+  const vis = recomputeVisible(root)
+  assert.equal(findById(vis, 1)!.visible, true)
+  assert.equal(findById(vis, 2)!.visible, false)
+})
+
+test('recomputeVisible: sibling goals are never hidden', () => {
+  // A tactic's children are subgoals that must all be proved, not alternatives
+  // to choose between, so none of them are hidden even when one is active.
+  const root = tactic(0, 'root', {
+    status: 'semiselected',
+    children: [
+      goal(1, 'g1', { status: 'selected' }),
+      goal(2, 'g2', { status: 'unselected' })
+    ]
+  })
+  const vis = recomputeVisible(root)
+  assert.deepEqual(vis.children.map((c) => c.visible), [true, true])
 })
 
 /* cacheChild / cacheIfSelected */

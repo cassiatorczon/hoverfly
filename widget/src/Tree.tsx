@@ -166,6 +166,27 @@ export function recomputeCompleted(n: Node): Node {
   return { ...n, children, cache, completed }
 }
 
+// Recompute the `visible` flag for every node. Once a tactic is chosen (one of
+// a goal's tactic children is on the active path), its siblings are hidden —
+// except cached ones, which stay visible so previously explored alternatives
+// remain reachable. Like `recomputeCompleted`, this is derived at render time
+// rather than threaded through the click logic.
+export function recomputeVisible(n: Node): Node {
+  const hasActiveTactic = n.kind === 'goal' &&
+    n.children.some((c: Node) =>
+      c.status === 'selected' || c.status === 'semiselected')
+
+  const children = n.children.map((c: Node) =>
+    recomputeVisible({
+      ...c,
+      visible: !(hasActiveTactic
+        && c.status === 'unselected'
+        && c.cache === undefined)
+    }))
+
+  return { ...n, children }
+}
+
 /* Get tree info */
 
 function isNonstrictAncestorOf(parentCand: Node, childId: ID)

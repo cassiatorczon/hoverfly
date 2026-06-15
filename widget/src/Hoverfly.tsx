@@ -19,7 +19,8 @@ import {
 import {
   Node,
   selectRoot,
-  recomputeCompleted
+  recomputeCompleted,
+  recomputeVisible
 } from './Tree'
 import {
   APIData,
@@ -128,10 +129,10 @@ function Hoverfly(props: HoverflyProps) {
       await handleClick(current.node, current.stateRef, n, rs, props.pos))
   }
 
-  // `completed` is derived from tree structure, so compute a fresh display
-  // copy here rather than threading it through every click. Click logic still
-  // operates on `current.node` (the source of truth) above.
-  const displayRoot = recomputeCompleted(current.node)
+  // `completed` and `visible` are derived from tree structure, so compute a
+  // fresh display copy here rather than threading them through every click.
+  // Click logic still operates on `current.node` (the source of truth) above.
+  const displayRoot = recomputeVisible(recomputeCompleted(current.node))
   return <><HoverflyTree root={displayRoot} onClick={onClick} /></>
 }
 
