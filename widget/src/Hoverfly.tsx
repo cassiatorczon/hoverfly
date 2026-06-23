@@ -121,19 +121,19 @@ function Hoverfly(props: HoverflyProps) {
       return <>Failed to load.</>
     }
     return <>Loading...</>
-  }
+  } else {
+    const onClick = async (n: Node) => {
+      console.info("Clicked node " + n.id)
+      setSaved(
+        await handleClick(current.node, current.stateRef, n, rs, props.pos))
+    }
 
-  const onClick = async (n: Node) => {
-    console.info("Clicked node " + n.id)
-    setSaved(
-      await handleClick(current.node, current.stateRef, n, rs, props.pos))
+    // `completed` and `visible` are derived from tree structure, so compute a
+    // fresh display copy here rather than threading them through every click.
+    // Click logic still operates on `current.node` (the source of truth) above.
+    const displayRoot = recomputeVisible(recomputeCompleted(current.node))
+    return <><HoverflyTree root={displayRoot} onClick={onClick} /></>
   }
-
-  // `completed` and `visible` are derived from tree structure, so compute a
-  // fresh display copy here rather than threading them through every click.
-  // Click logic still operates on `current.node` (the source of truth) above.
-  const displayRoot = recomputeVisible(recomputeCompleted(current.node))
-  return <><HoverflyTree root={displayRoot} onClick={onClick} /></>
 }
 
 export default Hoverfly
