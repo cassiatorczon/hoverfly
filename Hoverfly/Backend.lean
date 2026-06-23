@@ -37,6 +37,27 @@ def showGoal (mvarId : MVarId) : MetaM String := do
   let format ← ppGoal ppCtxt mvarId
   return format.pretty
 
+/--
+Like `restoreState`, but *also* rewinds the name generator (and the macro-scope and
+auxiliary-declaration generators) to the values captured in `s`.
+
+`Core.SavedState.restore` deliberately restores only `env`/`messages`/`infoState` and
+leaves `ngen` alone, because within a single elaboration thread the name generator only
+ever moves forward, so it must not be rolled back. That assumption breaks for us: every
+RPC request runs in a *fresh* `RequestM.runTermElabM` seeded from the `hoverfly`
+snapshot's command state, so `ngen` is reset to the snapshot value on each call. Plain
+`restoreState` then leaves `ngen` pointing *before* the `FVarId`/`MVarId`s that were
+allocated (in a previous request) and baked into `s`'s metavariable context. The next
+tactic re-issues those exact ids, clobbering the goal mvar and hypotheses in the restored
+context — which surfaces as nonsense like `function expected ?α`. Restoring `ngen` makes
+fresh allocations continue *past* everything already in `s`. -/
+def restoreStateFull (s : Lean.Elab.Term.SavedState) : Lean.Elab.TermElabM Unit := do
+  restoreState s
+  modifyThe Core.State fun st => { st with
+    ngen           := s.meta.core.ngen
+    nextMacroScope := s.meta.core.nextMacroScope
+    auxDeclNGen    := s.meta.core.auxDeclNGen }
+
 @[server_rpc_method]
 def getSubgoals
   (_params : GetSubgoalsParams)
@@ -55,35 +76,45 @@ def getSubgoals
         match goalMap.get? parentId with
         | some (mvarId, proofState) =>
 
-          -- restore proof state for parent goal of tactic
-          liftM (restoreState proofState : Lean.Elab.TermElabM Unit)
+          -- restore proof state (including the name generator, see `restoreStateFull`)
+          liftM (restoreStateFull proofState : Lean.Elab.TermElabM Unit)
 
-          -- run tactic
-          let result : List Lean.MVarId <- Lean.Elab.Tactic.run mvarId do
-            Lean.Elab.Tactic.evalTactic stx
+          try
+            -- run tactic
+            let result : List Lean.MVarId <- Lean.Elab.Tactic.run mvarId do
+              Lean.Elab.Tactic.evalTactic stx
 
-          -- add each new goal to map and return nodes and updated counter
-          let newProofState ←
-            liftM (saveState : Lean.Elab.TermElabM Lean.Elab.Term.SavedState)
-          let f t mvarId := match t with
-            | (nodes, tempGoalMap, c) => do
-              let goalPretty ← showGoal mvarId
-              let apiNode : APINode :=
-                {isGoal := true, id := c, display := goalPretty}
-              let goalInfo := (mvarId, newProofState)
-              let newMap := tempGoalMap.insert c goalInfo
-              return (apiNode :: nodes, newMap, c + 1)
-          let (goals, newGoalMap, newCounter) ←
-            result.foldlM f ([], goalMap, nodeCounter)
+            -- add each new goal to map and return nodes and updated counter
+            let newProofState ←
+              liftM (saveState : Lean.Elab.TermElabM Lean.Elab.Term.SavedState)
+            let f t mvarId := match t with
+              | (nodes, tempGoalMap, c) => do
+                let goalPretty ← showGoal mvarId
+                let apiNode : APINode :=
+                  {isGoal := true, id := c, display := goalPretty}
+                let goalInfo := (mvarId, newProofState)
+                let newMap := tempGoalMap.insert c goalInfo
+                return (apiNode :: nodes, newMap, c + 1)
+            let (goals, newGoalMap, newCounter) ←
+              result.foldlM f ([], goalMap, nodeCounter)
 
-          -- update state
-          let newState ← WithRpcRef.mk {
-              nodeCounter := newCounter
-              goalMap := newGoalMap,
-              tacticMap := tacticMap
+            -- update state
+            let newState ← WithRpcRef.mk {
+                nodeCounter := newCounter
+                goalMap := newGoalMap,
+                tacticMap := tacticMap
+              }
+
+            pure (goals, newState)
+          catch e =>
+            -- Surface tactic failures as a node instead of letting them escape as an
+            -- uncaught JSON-RPC error (which shows up as "Uncaught (in promise)").
+            let errNode : APINode := {
+              isGoal := true, id := nodeCounter,
+              display := s!"tactic '{stx.prettyPrint.pretty}' failed:\n\
+                {← e.toMessageData.toString}"
             }
-
-          pure (goals, newState)
+            pure ([errNode], _params.stateRef)
         | _ => pure ([], _params.stateRef) -- TODO: error behavior
       | _ => pure ([], _params.stateRef) -- TODO: error behavior
 
@@ -132,7 +163,7 @@ def getApplicableTactics
 
         -- filter for tactics that don't fail on the goal
         let succeeds t : RequestT Elab.TermElabM Bool := do
-          liftM (restoreState proofState : Lean.Elab.TermElabM Unit)
+          liftM (restoreStateFull proofState : Lean.Elab.TermElabM Unit)
 
           -- run tactic
           try
@@ -141,7 +172,7 @@ def getApplicableTactics
             return true
           catch _ => return false
         let succeedingTactics ← List.filterM succeeds ts
-        liftM (restoreState proofState : Lean.Elab.TermElabM Unit)
+        liftM (restoreStateFull proofState : Lean.Elab.TermElabM Unit)
 
         -- add each new tactic to map and return nodes and updated counter
         let f t stx := match t with
