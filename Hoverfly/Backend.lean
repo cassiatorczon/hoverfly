@@ -16,6 +16,7 @@ structure APINode where
   isGoal : Bool
   id : StateId
   display : String
+  success : Bool
   deriving ToJson, FromJson
 
 structure GetSubgoalsParams where
@@ -91,7 +92,7 @@ def getSubgoals
               | (nodes, tempGoalMap, c) => do
                 let goalPretty ← showGoal mvarId
                 let apiNode : APINode :=
-                  {isGoal := true, id := c, display := goalPretty}
+                  {isGoal := true, id := c, display := goalPretty, success := true} --todo: success?
                 let goalInfo := (mvarId, newProofState)
                 let newMap := tempGoalMap.insert c goalInfo
                 return (apiNode :: nodes, newMap, c + 1)
@@ -112,7 +113,8 @@ def getSubgoals
             let errNode : APINode := {
               isGoal := true, id := nodeCounter,
               display := s!"tactic '{stx.prettyPrint.pretty}' failed:\n\
-                {← e.toMessageData.toString}"
+                {← e.toMessageData.toString}",
+              success := false -- TODO
             }
             pure ([errNode], _params.stateRef)
         | _ => pure ([], _params.stateRef) -- TODO: error behavior
@@ -171,28 +173,32 @@ def getApplicableTactics
               Lean.Elab.Tactic.evalTactic t
             return true
           catch _ => return false
-        let succeedingTactics ← List.filterM succeeds ts
+        let (succeedingTactics, failingTactics) ← List.partitionM succeeds ts
         liftM (restoreStateFull proofState : Lean.Elab.TermElabM Unit)
 
         -- add each new tactic to map and return nodes and updated counter
-        let f t stx := match t with
+        let f isSuccess t stx := match t with
           | (nodes, tempTacticMap, c) =>
             let apiNode : APINode :=
-              {isGoal := false, id := c, display := stx.prettyPrint.pretty}
+              {isGoal := false, id := c, display := stx.prettyPrint.pretty,
+                success := isSuccess}
             let tacticInfo := (stx, _params.id)
             let newMap := tempTacticMap.insert c tacticInfo
             (apiNode :: nodes, newMap, c + 1)
-        let (tactics, newTacticMap, newCounter) :=
-          succeedingTactics.foldl f ([], tacticMap, nodeCounter)
+        let (tacticsSuccess, newTacticMapSuccess, newCounterSuccess) :=
+          succeedingTactics.foldl (f true) ([], tacticMap, nodeCounter)
+        let (tacticsAll, newTacticMapAll, newCounterAll) :=
+          succeedingTactics.foldl (f false)
+            (tacticsSuccess, newTacticMapSuccess, newCounterSuccess)
 
         -- update state
         let newState ← WithRpcRef.mk {
-            nodeCounter := newCounter
+            nodeCounter := newCounterAll
             goalMap := goalMap,
-            tacticMap := newTacticMap
+            tacticMap := newTacticMapAll
           }
 
-        pure (tactics, newState)
+        pure (tacticsAll, newState)
       | _ => pure ([], _params.stateRef) -- TODO: error behavior
 
 
@@ -208,7 +214,7 @@ elab stx:"hoverfly" : tactic => do
   -- make API copy of root goal
   let display ← Meta.ppGoal rootMVarId
   let rootGoal : APINode :=
-          {isGoal := true, id := 0, display := display.pretty'}
+          {isGoal := true, id := 0, display := display.pretty', success := true} --TODO: success?
 
   -- initialize map of goal ids to MVarIds and States
   let initialGoalMap := Std.HashMap.ofList [

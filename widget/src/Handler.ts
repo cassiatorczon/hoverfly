@@ -17,6 +17,7 @@ export type APINode = {
   isGoal: boolean
   id: number
   display: string
+  success: boolean
 }
 
 export type NodeAndStateRef = { node: Node, stateRef: APIData }
