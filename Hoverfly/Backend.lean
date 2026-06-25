@@ -229,7 +229,7 @@ elab stx:"hoverfly" : tactic => do
       let jsonApiData ← rpcEncode ref
       pure $ json% { root: $(jsonRoot) , apiData: $(jsonApiData) }) stx
 
-theorem foobar : 1 = 1 /\ 2 = 2 := by
+theorem demo_mini : 1 = 1 /\ 2 = 2 := by
   hoverfly
   sorry
 
@@ -239,7 +239,7 @@ theorem demo_simple (very_very_long_variable_name : Nat) :
   hoverfly
   sorry
 
-theorem demo (n m : Nat) : n <= m → ∃ x, m = x + n := by
+theorem demo_medium (n m : Nat) : n <= m → ∃ x, m = x + n := by
   sorry
 -- Proof 0:
   -- intros
