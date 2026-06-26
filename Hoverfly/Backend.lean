@@ -188,7 +188,7 @@ def getApplicableTactics
         let (tacticsSuccess, newTacticMapSuccess, newCounterSuccess) :=
           succeedingTactics.foldl (f true) ([], tacticMap, nodeCounter)
         let (tacticsAll, newTacticMapAll, newCounterAll) :=
-          succeedingTactics.foldl (f false)
+          failingTactics.foldl (f false)
             (tacticsSuccess, newTacticMapSuccess, newCounterSuccess)
 
         -- update state
