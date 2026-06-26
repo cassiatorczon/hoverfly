@@ -1,5 +1,7 @@
 import ProofWidgets
 
+import Palamedes.Synthesizer
+
 namespace Backend
 open Lean ProofWidgets Server
 
@@ -126,25 +128,50 @@ structure GetApplicableTacticsParams where
   pos : Lsp.Position
   deriving RpcEncodable
 
+
+
 -- TODO
-def tacticList : Elab.TermElabM (List Syntax) := do
-  let tac_rfl ← `(tactic | rfl) --TODO
-  let tac_and ← `(tactic | apply And.intro)
-  let tac_intros ← `(tactic | intros)
-  let tac_assumption ← `(tactic | assumption)
-  let tac_contradiction ← `(tactic | contradiction)
+def tacticListGeneral : Elab.TermElabM (List Syntax) := do
+  let tacs :=  [
+    ← `(tactic | rfl),
+    ← `(tactic | apply And.intro),
+    ← `(tactic | intros),
+    ← `(tactic | assumption),
+    ← `(tactic | contradiction),
 
-  let tac_simp_all ← `(tactic | simp_all)
-  let tac_very_long ← `(tactic | skip <;> skip <;> skip <;> skip <;> skip <;> skip)
+    ← `(tactic | simp_all),
+    ← `(tactic | skip <;> skip <;> skip <;> skip <;> skip <;> skip),
 
-  let tac_subst_eqs ← `(tactic | subst_eqs)
-  let tac_intro ← `(tactic | intro)
-  let tac_rw_eq_comm ← `(tactic | rw [Eq.comm])
+    ← `(tactic | subst_eqs),
+    ← `(tactic | intro),
+    ← `(tactic | rw [Eq.comm])
+  ]
 
-  return List.map Lean.TSyntax.raw
-    [tac_rfl, tac_and, tac_intros, tac_assumption, tac_contradiction,
-      tac_simp_all, tac_very_long, tac_subst_eqs, tac_intro, tac_rw_eq_comm
+  return List.map Lean.TSyntax.raw tacs
+
+-- TODO
+def tacticListPalamedes : Elab.TermElabM (List Syntax) := do
+  let tacs := [
+      ← `(tactic | ((repeat apply duncurry); intro)),
+      ← `(tactic | apply s_arbUnit),
+      ← `(tactic | apply s_arbBool),
+      ← `(tactic | apply s_arbColor),
+      ← `(tactic | apply s_arbNat),
+      ← `(tactic | apply s_arbTy),
+      ← `(tactic | apply s_arbLabel),
+      ← `(tactic | assumption),
+      ← `(tactic | normalize_and_apply),
+      ← `(tactic | normalize_and_apply_unfold),
+      ← `(tactic | apply s_arbAtom _),
+      ← `(tactic | apply s_gt),
+      ← `(tactic | apply s_mod2_partial),
+      ← `(tactic | apply s_lt_partial),
+      ← `(tactic | apply s_between_partial),
+      ← `(tactic | apply (s_between (by first | aesop | omega))),
+      ← `(tactic | (goal_is_eq; apply convert (by norm_for_elements) (s_elements_partial _))),
+      ← `(tactic | apply s_arbTuple)
     ]
+  return List.map Lean.TSyntax.raw tacs
 
 @[server_rpc_method]
 def getApplicableTactics
@@ -161,7 +188,7 @@ def getApplicableTactics
       | some (mvarId, proofState) =>
 
         -- get all tactics
-        let ts ← tacticList
+        let ts ← tacticListPalamedes -- TODO
 
         -- filter for tactics that don't fail on the goal
         let succeeds t : RequestT Elab.TermElabM Bool := do

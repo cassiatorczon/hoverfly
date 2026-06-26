@@ -1,6 +1,17 @@
 import Hoverfly.Backend
 
-import Palamedes.Synthesizer
+
+def demo_genEq2 : CorrectGen (· = 2) := by
+  hoverfly
+  sorry
+
+def isAllTwos : Tree Nat → Bool
+  | .leaf => true
+  | .node l x r => x = 2 && isAllTwos l && isAllTwos r
+
+def demo_genAllTwos : CorrectGen (fun t => isAllTwos t) := by
+  hoverfly
+  sorry
 
 theorem demo_mini : 1 = 1 /\ 2 = 2 := by
   hoverfly
