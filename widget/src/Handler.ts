@@ -18,6 +18,7 @@ export type APINode = {
   id: number
   display: string
   tacticError: string | null
+  noop: boolean
 }
 
 export type NodeAndStateRef = { node: Node, stateRef: APIData }
@@ -29,6 +30,7 @@ export function APINodeToNode(n: APINode): Node {
       id: n.id,
       display: n.display,
       tacticError: undefined,
+      noop: false,
       completed: false,
       status: 'unselected',
       visible: true,
@@ -42,6 +44,7 @@ export function APINodeToNode(n: APINode): Node {
       id: n.id,
       display: n.display,
       tacticError: n.tacticError ?? undefined,
+      noop: n.noop,
       completed: false,
       status: 'unselected',
       visible: true,

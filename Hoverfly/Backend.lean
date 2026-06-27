@@ -22,6 +22,7 @@ structure APINode where
   id : StateId
   display : String
   tacticError : Option String := none
+  noop : Bool := false
   deriving ToJson, FromJson
 
 structure GetSubgoalsParams where
@@ -174,7 +175,8 @@ def tacticListPalamedes : Elab.TermElabM (List Syntax) := do
       ← `(tactic | apply s_between_partial),
       ← `(tactic | apply (s_between (by first | aesop | omega))),
       ← `(tactic | (goal_is_eq; apply convert (by norm_for_elements) (s_elements_partial _))),
-      ← `(tactic | apply s_arbTuple)
+      ← `(tactic | apply s_arbTuple),
+      ← `(tactic | skip)
     ]
   return List.map Lean.TSyntax.raw tacs
 
@@ -195,29 +197,34 @@ def getApplicableTactics
         -- get all tactics
         let ts ← tacticListPalamedes -- TODO
 
-        -- run each tactic, recording the error message if it failed
+        -- run each tactic, recording the error message if it failed and whether
+        -- it left the proof state unchanged
         let evalTac t :
-            RequestT Elab.TermElabM (Syntax × Option String) := do
+            RequestT Elab.TermElabM (Syntax × Option String × Bool) := do
           liftM (restoreStateFull proofState : Lean.Elab.TermElabM Unit)
-          -- run tactic
+          /- run the tactic
+            - if the tactic fails, record the error message
+            - if the tactic doesn't assign or change the goal, mark it no-op -/
           try
-            let _ <- Elab.Term.withoutErrToSorry do
+            let goals ← Elab.Term.withoutErrToSorry do
               Lean.Elab.Tactic.run mvarId do
                 Lean.Elab.Tactic.evalTactic t
-            return (t, none)
+            let assigned ← liftM (mvarId.isAssigned : Lean.Elab.TermElabM Bool)
+            return (t, none, goals == [mvarId] && !assigned)
           catch e =>
-            return (t, some (← e.toMessageData.toString))
+            return (t, some (← e.toMessageData.toString), false)
         let results ← ts.mapM evalTac
         liftM (restoreStateFull proofState : Lean.Elab.TermElabM Unit)
 
-        let (succeedingResults, failingResults) := results.partition (·.2.isNone)
+        let (succeedingResults, failingResults) :=
+          results.partition (·.2.1.isNone)
 
         -- add each new tactic to map and return nodes and updated counter
         let f acc res := match acc, res with
-          | (nodes, tempTacticMap, c), (stx, tacErr) =>
+          | (nodes, tempTacticMap, c), (stx, tacErr, noop) =>
             let apiNode : APINode :=
               {isGoal := false, id := c, display := stx.prettyPrint.pretty,
-                tacticError := tacErr}
+                tacticError := tacErr, noop := noop}
             let tacticInfo := (stx, _params.id)
             let newMap := tempTacticMap.insert c tacticInfo
             (apiNode :: nodes, newMap, c + 1)

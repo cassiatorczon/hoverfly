@@ -76,7 +76,12 @@ function renderNode(n: Node, onClick: (clicked: Node) => Promise<void>)
 
   const isFailingTactic = (c: Node) =>
     c.kind === 'tactic' && c.tacticError !== undefined
-  const mainChildren = n.children.filter((c: Node) => !isFailingTactic(c))
+  const isNoopTactic = (c: Node) =>
+    c.kind === 'tactic' && c.tacticError === undefined && c.noop
+  const mainChildren = n.children.filter(
+    (c: Node) => !isFailingTactic(c) && !isNoopTactic(c))
+  const noopChildren =
+    n.children.filter((c: Node) => isNoopTactic(c) && c.visible)
   const failingChildren =
     n.children.filter((c: Node) => isFailingTactic(c) && c.visible)
 
@@ -110,6 +115,19 @@ function renderNode(n: Node, onClick: (clicked: Node) => Promise<void>)
       {n.children.length > 0 &&
         <ul className="failing-children">
           {mainChildren.map((child: Node) => renderNode(child, onClick))}
+          {noopChildren.length > 0 &&
+            <li>
+              <details className="failing-group">
+                <summary>
+                  {noopChildren.length} no-op{' '}
+                  {noopChildren.length === 1 ? 'tactic' : 'tactics'}
+                </summary>
+                <ul className="failing-children">
+                  {noopChildren.map((child: Node) =>
+                    renderNode(child, onClick))}
+                </ul>
+              </details>
+            </li>}
           {failingChildren.length > 0 &&
             <li>
               <details className="failing-group">

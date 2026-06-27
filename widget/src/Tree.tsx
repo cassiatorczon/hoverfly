@@ -10,6 +10,7 @@ type MutableNode = {
   id: ID, // should be unique among all nodes; must have an immutable type
   display: string, // display
   tacticError: string | undefined, // for failing tactics: why it failed; undefined ⇒ succeeded (or goal)
+  noop: boolean, // for tactics: succeeded but left the proof state unchanged
   completed: boolean, // a completed goal or tactic with all completed subgoals
   children: Node[], // applicable tactics for a goal, subgoals for a tactic
   status: Status, // display information
