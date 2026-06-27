@@ -9,6 +9,7 @@ type MutableNode = {
   kind: Kind, // tactic or goal
   id: ID, // should be unique among all nodes; must have an immutable type
   display: string, // display
+  success: boolean, // whether this tactic succeeds on its parent goal
   completed: boolean, // a completed goal or tactic with all completed subgoals
   children: Node[], // applicable tactics for a goal, subgoals for a tactic
   status: Status, // display information
@@ -167,10 +168,11 @@ export function recomputeCompleted(n: Node): Node {
 }
 
 // Recompute the `visible` flag for every node. Once a tactic is chosen (one of
-// a goal's tactic children is on the active path), its siblings are hidden —
-// except cached ones, which stay visible so previously explored alternatives
-// remain reachable. Like `recomputeCompleted`, this is derived at render time
-// rather than threaded through the click logic.
+// a goal's tactic children is on the active path), all of its siblings are
+// hidden — including cached ones. To revisit a previously explored sibling you
+// backtrack to the parent goal, which re-selects it and brings the whole tactic
+// menu (with cache badges) back. Like `recomputeCompleted`, this is derived at
+// render time rather than threaded through the click logic.
 export function recomputeVisible(n: Node): Node {
   const hasActiveTactic = n.kind === 'goal' &&
     n.children.some((c: Node) =>
@@ -179,9 +181,7 @@ export function recomputeVisible(n: Node): Node {
   const children = n.children.map((c: Node) =>
     recomputeVisible({
       ...c,
-      visible: !(hasActiveTactic
-        && c.status === 'unselected'
-        && c.cache === undefined)
+      visible: !(hasActiveTactic && c.status === 'unselected')
     }))
 
   return { ...n, children }

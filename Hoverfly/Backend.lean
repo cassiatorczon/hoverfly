@@ -157,6 +157,8 @@ def tacticListGeneral : Elab.TermElabM (List Syntax) := do
 def tacticListPalamedes : Elab.TermElabM (List Syntax) := do
   let tacs := [
       ← `(tactic | ((repeat apply duncurry); intro)),
+      ← `(tactic | apply s_pure),
+      ← `(tactic | apply s_pick),
       ← `(tactic | apply s_arbUnit),
       ← `(tactic | apply s_arbBool),
       ← `(tactic | apply s_arbColor),

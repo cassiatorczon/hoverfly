@@ -7,6 +7,10 @@ def demo_genEq2 : CorrectGen (· = 2) := by
   hoverfly
   sorry
 
+def demo_genEq2or3 : CorrectGen (fun x => x = 2 ∨ x = 3) := by
+  hoverfly
+  sorry
+
 def isAllTwos : Tree Nat → Bool
   | .leaf => true
   | .node l x r => x = 2 && isAllTwos l && isAllTwos r

@@ -41,10 +41,18 @@ function renderNode(n: Node, onClick: (clicked: Node) => Promise<void>)
   }
 
   const marker = n.kind === 'goal' ? '⊢' : '▸'
+  const failed = n.kind === 'tactic' && !n.success
+  const successClass = n.kind === 'tactic' ? (n.success ? 'succeeds' : 'fails') : ''
+
+  const isFailingTactic = (c: Node) => c.kind === 'tactic' && !c.success
+  const mainChildren = n.children.filter((c: Node) => !isFailingTactic(c))
+  const failingChildren =
+    n.children.filter((c: Node) => isFailingTactic(c) && c.visible)
 
   return (
     <li key={n.id}>
-      <div className={`rowA ${n.kind} ${n.status}`} onClick={() => onClick(n)}>
+      <div className={`rowA ${n.kind} ${n.status} ${successClass}`}
+        onClick={failed ? undefined : () => onClick(n)}>
         <span className="marker">{marker}</span>
         <span className="disp">{n.display}</span>
         {n.cache
@@ -63,8 +71,21 @@ function renderNode(n: Node, onClick: (clicked: Node) => Promise<void>)
         <span className="id">#{n.id}</span>
       </div>
       {n.children.length > 0 &&
-        <ul className="kids">
-          {n.children.map((child: Node) => renderNode(child, onClick))}
+        <ul className="failing-children">
+          {mainChildren.map((child: Node) => renderNode(child, onClick))}
+          {failingChildren.length > 0 &&
+            <li>
+              <details className="failing-group">
+                <summary>
+                  {failingChildren.length} failing{' '}
+                  {failingChildren.length === 1 ? 'tactic' : 'tactics'}
+                </summary>
+                <ul className="failing-children">
+                  {failingChildren.map((child: Node) =>
+                    renderNode(child, onClick))}
+                </ul>
+              </details>
+            </li>}
         </ul>}
     </li>
   )

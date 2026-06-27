@@ -31,7 +31,7 @@
   position: relative;
 }
 
-.hf .treeA .kids {
+.hf .treeA .failing-children {
   margin-left: 9px;
   padding-left: 11px;
   border-left: 1px solid var(--vscode-panel-border);
@@ -50,6 +50,28 @@
 
 .hf .rowA:hover {
   background: var(--vscode-list-hoverBackground);
+}
+
+.hf .rowA.tactic.fails {
+  cursor: default;
+}
+
+.hf .rowA.tactic.fails:hover {
+  background: none;
+}
+
+/* Collapsed group holding the tactics that fail on the goal */
+.hf .failing-group>summary {
+  cursor: pointer;
+  padding: 3px 7px;
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+  list-style-position: inside;
+  user-select: none;
+}
+
+.hf .failing-group>summary:hover {
+  color: var(--vscode-foreground);
 }
 
 .hf .rowA .marker {
@@ -125,6 +147,14 @@
 
 .hf .rowA.unselected .disp {
   color: var(--vscode-descriptionForeground);
+}
+
+.hf .rowA.tactic.unselected.fails .disp {
+  color: var(--vscode-descriptionForeground);
+}
+
+.hf .rowA.tactic.unselected.succeeds .disp {
+  color: var(--vscode-textLink-foreground);
 }
 
 .hf .rowA.semiselected {
