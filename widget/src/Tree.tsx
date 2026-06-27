@@ -9,7 +9,7 @@ type MutableNode = {
   kind: Kind, // tactic or goal
   id: ID, // should be unique among all nodes; must have an immutable type
   display: string, // display
-  success: boolean, // whether this tactic succeeds on its parent goal
+  tacticError: string | undefined, // for failing tactics: why it failed; undefined ⇒ succeeded (or goal)
   completed: boolean, // a completed goal or tactic with all completed subgoals
   children: Node[], // applicable tactics for a goal, subgoals for a tactic
   status: Status, // display information

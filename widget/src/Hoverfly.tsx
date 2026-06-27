@@ -1,4 +1,4 @@
-import { useState, useEffect, useContext } from 'react'
+import { useState, useEffect, useContext, useRef } from 'react'
 import {
   useRpcSession,
   useAsync,
@@ -34,6 +34,35 @@ import hoverflyStyles from './styles.css'
 
 /* React */
 
+function HoverError({ message, children }: {
+  message: string, children: React.ReactNode
+}) {
+  const [show, setShow] = useState(false)
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const clear = () => {
+    if (timer.current !== null) {
+      clearTimeout(timer.current)
+      timer.current = null
+    }
+  }
+  const onEnter = () => {
+    clear()
+    timer.current = setTimeout(() => setShow(true), 500)
+  }
+  const onLeave = () => {
+    clear()
+    setShow(false)
+  }
+
+  return (
+    <div className="err-wrap" onMouseEnter={onEnter} onMouseLeave={onLeave}>
+      {children}
+      {show && <div className="err-tooltip">{message}</div>}
+    </div>
+  )
+}
+
 function renderNode(n: Node, onClick: (clicked: Node) => Promise<void>)
   : React.ReactNode {
   if (!n.visible) {
@@ -41,35 +70,43 @@ function renderNode(n: Node, onClick: (clicked: Node) => Promise<void>)
   }
 
   const marker = n.kind === 'goal' ? '⊢' : '▸'
-  const failed = n.kind === 'tactic' && !n.success
-  const successClass = n.kind === 'tactic' ? (n.success ? 'succeeds' : 'fails') : ''
+  const failed = n.kind === 'tactic' && n.tacticError !== undefined
+  const successClass = n.kind === 'tactic'
+    ? (n.tacticError === undefined ? 'succeeds' : 'fails') : ''
 
-  const isFailingTactic = (c: Node) => c.kind === 'tactic' && !c.success
+  const isFailingTactic = (c: Node) =>
+    c.kind === 'tactic' && c.tacticError !== undefined
   const mainChildren = n.children.filter((c: Node) => !isFailingTactic(c))
   const failingChildren =
     n.children.filter((c: Node) => isFailingTactic(c) && c.visible)
 
+  const row = (
+    <div className={`rowA ${n.kind} ${n.status} ${successClass}`}
+      onClick={failed ? undefined : () => onClick(n)}>
+      <span className="marker">{marker}</span>
+      <span className="disp">{n.display}</span>
+      {n.cache
+        ? (n.cache.completed
+          ? (n.kind === 'goal'
+            ? <span className="badge-done" title="Completed">✓</span>
+            : <span className="badge-cached-done"
+              title="A completed proof is stored here — go back to finish">★</span>)
+          : <span className="badge-cached"
+            title="Cached — progress stored, no full proof yet">☆</span>)
+        : n.completed
+          ? <span className="badge-done" title="Completed">✓</span>
+          : n.explored
+            ? <span className="badge-explored" title="Already explored">•</span>
+            : null}
+      <span className="id">#{n.id}</span>
+    </div>
+  )
+
   return (
     <li key={n.id}>
-      <div className={`rowA ${n.kind} ${n.status} ${successClass}`}
-        onClick={failed ? undefined : () => onClick(n)}>
-        <span className="marker">{marker}</span>
-        <span className="disp">{n.display}</span>
-        {n.cache
-          ? (n.cache.completed
-            ? (n.kind === 'goal'
-              ? <span className="badge-done" title="Completed">✓</span>
-              : <span className="badge-cached-done"
-                title="A completed proof is stored here — go back to finish">★</span>)
-            : <span className="badge-cached"
-              title="Cached — progress stored, no full proof yet">☆</span>)
-          : n.completed
-            ? <span className="badge-done" title="Completed">✓</span>
-            : n.explored
-              ? <span className="badge-explored" title="Already explored">•</span>
-              : null}
-        <span className="id">#{n.id}</span>
-      </div>
+      {failed && n.tacticError
+        ? <HoverError message={n.tacticError}>{row}</HoverError>
+        : row}
       {n.children.length > 0 &&
         <ul className="failing-children">
           {mainChildren.map((child: Node) => renderNode(child, onClick))}

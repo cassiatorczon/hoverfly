@@ -21,7 +21,7 @@ structure APINode where
   isGoal : Bool
   id : StateId
   display : String
-  success : Bool
+  tacticError : Option String := none
   deriving ToJson, FromJson
 
 structure GetSubgoalsParams where
@@ -98,7 +98,7 @@ def getSubgoals
               | (nodes, tempGoalMap, c) => do
                 let goalPretty ← showGoal mvarId
                 let apiNode : APINode :=
-                  {isGoal := true, id := c, display := goalPretty, success := true} --todo: success?
+                  {isGoal := true, id := c, display := goalPretty}
                 let goalInfo := (mvarId, newProofState)
                 let newMap := tempGoalMap.insert c goalInfo
                 return (apiNode :: nodes, newMap, c + 1)
@@ -119,8 +119,7 @@ def getSubgoals
             let errNode : APINode := {
               isGoal := true, id := nodeCounter,
               display := s!"tactic '{stx.prettyPrint.pretty}' failed:\n\
-                {← e.toMessageData.toString}",
-              success := false -- TODO
+                {← e.toMessageData.toString}"
             }
             pure ([errNode], _params.stateRef)
         | _ => pure ([], _params.stateRef) -- TODO: error behavior
@@ -196,32 +195,36 @@ def getApplicableTactics
         -- get all tactics
         let ts ← tacticListPalamedes -- TODO
 
-        -- filter for tactics that don't fail on the goal
-        let succeeds t : RequestT Elab.TermElabM Bool := do
+        -- run each tactic, recording the error message if it failed
+        let evalTac t :
+            RequestT Elab.TermElabM (Syntax × Option String) := do
           liftM (restoreStateFull proofState : Lean.Elab.TermElabM Unit)
           -- run tactic
           try
             let _ <- Elab.Term.withoutErrToSorry do
               Lean.Elab.Tactic.run mvarId do
                 Lean.Elab.Tactic.evalTactic t
-            return true
-          catch _ => return false
-        let (succeedingTactics, failingTactics) ← List.partitionM succeeds ts
+            return (t, none)
+          catch e =>
+            return (t, some (← e.toMessageData.toString))
+        let results ← ts.mapM evalTac
         liftM (restoreStateFull proofState : Lean.Elab.TermElabM Unit)
 
+        let (succeedingResults, failingResults) := results.partition (·.2.isNone)
+
         -- add each new tactic to map and return nodes and updated counter
-        let f isSuccess t stx := match t with
-          | (nodes, tempTacticMap, c) =>
+        let f acc res := match acc, res with
+          | (nodes, tempTacticMap, c), (stx, tacErr) =>
             let apiNode : APINode :=
               {isGoal := false, id := c, display := stx.prettyPrint.pretty,
-                success := isSuccess}
+                tacticError := tacErr}
             let tacticInfo := (stx, _params.id)
             let newMap := tempTacticMap.insert c tacticInfo
             (apiNode :: nodes, newMap, c + 1)
         let (tacticsSuccess, newTacticMapSuccess, newCounterSuccess) :=
-          succeedingTactics.foldl (f true) ([], tacticMap, nodeCounter)
+          succeedingResults.foldl f ([], tacticMap, nodeCounter)
         let (tacticsAll, newTacticMapAll, newCounterAll) :=
-          failingTactics.foldl (f false)
+          failingResults.foldl f
             (tacticsSuccess, newTacticMapSuccess, newCounterSuccess)
 
         -- update state
@@ -247,7 +250,7 @@ elab stx:"hoverfly" : tactic => do
   -- make API copy of root goal
   let display ← Meta.ppGoal rootMVarId
   let rootGoal : APINode :=
-          {isGoal := true, id := 0, display := display.pretty', success := true} --TODO: success?
+          {isGoal := true, id := 0, display := display.pretty'}
 
   -- initialize map of goal ids to MVarIds and States
   let initialGoalMap := Std.HashMap.ofList [
