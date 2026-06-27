@@ -1,5 +1,7 @@
 import Hoverfly.Backend
 
+import Palamedes.Synthesizer
+open Gen.CorrectGen
 
 def demo_genEq2 : CorrectGen (· = 2) := by
   hoverfly

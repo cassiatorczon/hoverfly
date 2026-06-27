@@ -5,6 +5,9 @@ import Palamedes.Synthesizer
 namespace Backend
 open Lean ProofWidgets Server
 
+-- TODO: Need this to make the tactics resolve correctly
+open Gen.CorrectGen
+
 def StateId := Nat
   deriving OfNat, BEq, Hashable, ToJson, FromJson, HAdd
 
@@ -84,8 +87,9 @@ def getSubgoals
 
           try
             -- run tactic
-            let result : List Lean.MVarId <- Lean.Elab.Tactic.run mvarId do
-              Lean.Elab.Tactic.evalTactic stx
+            let result : List Lean.MVarId <- Elab.Term.withoutErrToSorry do
+              Lean.Elab.Tactic.run mvarId do
+                Lean.Elab.Tactic.evalTactic stx
 
             -- add each new goal to map and return nodes and updated counter
             let newProofState ←
@@ -193,11 +197,11 @@ def getApplicableTactics
         -- filter for tactics that don't fail on the goal
         let succeeds t : RequestT Elab.TermElabM Bool := do
           liftM (restoreStateFull proofState : Lean.Elab.TermElabM Unit)
-
           -- run tactic
           try
-            let _ <- Lean.Elab.Tactic.run mvarId do
-              Lean.Elab.Tactic.evalTactic t
+            let _ <- Elab.Term.withoutErrToSorry do
+              Lean.Elab.Tactic.run mvarId do
+                Lean.Elab.Tactic.evalTactic t
             return true
           catch _ => return false
         let (succeedingTactics, failingTactics) ← List.partitionM succeeds ts
