@@ -203,14 +203,23 @@ def getApplicableTactics
             RequestT Elab.TermElabM (Syntax × Option String × Bool) := do
           liftM (restoreStateFull proofState : Lean.Elab.TermElabM Unit)
           /- run the tactic
-            - if the tactic fails, record the error message
+            - if the tactic throws, record the error message
+            - if the tactic "fails softly" (logs an error-severity message), record the error message
             - if the tactic doesn't assign or change the goal, mark it no-op -/
+          let msgsBefore ←
+            liftM ((do return (← getThe Core.State).messages.toList) : Elab.TermElabM _)
           try
             let goals ← Elab.Term.withoutErrToSorry do
               Lean.Elab.Tactic.run mvarId do
                 Lean.Elab.Tactic.evalTactic t
-            let assigned ← liftM (mvarId.isAssigned : Lean.Elab.TermElabM Bool)
-            return (t, none, goals == [mvarId] && !assigned)
+            let newMsgs ←
+              liftM ((do return (← getThe Core.State).messages.toList.drop msgsBefore.length)
+                : Elab.TermElabM _)
+            match newMsgs.find? (fun m => m.severity matches .error) with
+            | some err => return (t, some (← err.data.toString), false)
+            | none =>
+              let assigned ← liftM (mvarId.isAssigned : Lean.Elab.TermElabM Bool)
+              return (t, none, goals == [mvarId] && !assigned)
           catch e =>
             return (t, some (← e.toMessageData.toString), false)
         let results ← ts.mapM evalTac
