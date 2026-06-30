@@ -31,6 +31,26 @@ structure GetSubgoalsParams where
   pos : Lsp.Position
   deriving RpcEncodable
 
+def getGoalClusters (goals : List MVarId) : MetaM (List (List MVarId)) := do
+  let mvarGoalLists ← goals.mapM (fun g => do
+    let mvs ← g.getMVarDependencies
+    return (g, mvs.toList))
+  let mvarLists := mvarGoalLists.map (fun (_,x) => x)
+  let f mvs clustersSoFar : List (List MVarId) :=
+    let g mv acc : List (List MVarId) :=
+      let (withMv, withoutMv) := acc.partition (fun l => l.contains mv)
+      withMv.flatten.eraseDups :: withoutMv
+    mvs.fold g clustersSoFar
+  let clusters : List (List MVarId) := mvarLists.fold f mvarLists
+  let key p : Option (List MVarId) := do
+    match p with
+    | (g, mvs) =>
+      clusters.find?
+        (fun (cluster : List MVarId) =>
+          not (List.isEmpty (cluster.union mvs)))
+  let goals' := List.map (fun l => List.map (fun (x,_) => x) l) (Std.HashMap.values (mvarGoalLists.groupByKey key))
+  return goals'
+
 -- TODO there's got to be a better function for this already
 def showGoal (mvarId : MVarId) : MetaM String := do
   let ppCtxt : PPContext := {
@@ -68,7 +88,7 @@ def restoreStateFull (s : Lean.Elab.Term.SavedState) : Lean.Elab.TermElabM Unit 
 @[server_rpc_method]
 def getSubgoals
   (_params : GetSubgoalsParams)
-  : RequestM (RequestTask ((List APINode) × WithRpcRef State)) :=
+  : RequestM (RequestTask ((List (List APINode)) × WithRpcRef State)) :=
   RequestM.withWaitFindSnapAtPos _params.pos fun snap => do
     RequestM.runTermElabM snap do
       -- get counter and maps
@@ -91,6 +111,7 @@ def getSubgoals
             let result : List Lean.MVarId <- Elab.Term.withoutErrToSorry do
               Lean.Elab.Tactic.run mvarId do
                 Lean.Elab.Tactic.evalTactic stx
+            let clusters ← getGoalClusters result
 
             -- add each new goal to map and return nodes and updated counter
             let newProofState ←
@@ -103,8 +124,13 @@ def getSubgoals
                 let goalInfo := (mvarId, newProofState)
                 let newMap := tempGoalMap.insert c goalInfo
                 return (apiNode :: nodes, newMap, c + 1)
+            let g (t : List (List APINode) × Std.HashMap StateId (MVarId × Elab.Term.SavedState) × StateId) mvarIds :=
+              match t with
+              | (gss, goalMap, count) => do
+                let (gs, newMap, newCount) ← mvarIds.foldlM f ([], goalMap, count)
+                return (gs :: gss, newMap, newCount)
             let (goals, newGoalMap, newCounter) ←
-              result.foldlM f ([], goalMap, nodeCounter)
+              clusters.foldlM g ([], goalMap, nodeCounter)
 
             -- update state
             let newState ← WithRpcRef.mk {
@@ -122,7 +148,7 @@ def getSubgoals
               display := s!"tactic '{stx.prettyPrint.pretty}' failed:\n\
                 {← e.toMessageData.toString}"
             }
-            pure ([errNode], _params.stateRef)
+            pure ([[errNode]], _params.stateRef)
         | _ => pure ([], _params.stateRef) -- TODO: error behavior
       | _ => pure ([], _params.stateRef) -- TODO: error behavior
 
