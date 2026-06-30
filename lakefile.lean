@@ -16,7 +16,7 @@ The following config is inspired by https://github.com/leanprover-community/Proo
 
 input_dir widgetSrcs where
   path := "widget" / "src"
-  filter := .extension <| .mem #["ts", "tsx"]
+  filter := .extension <| .mem #["ts", "tsx", "css"]
   text := true
 
 input_file widgetPackageJson where

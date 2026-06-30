@@ -78,9 +78,10 @@
 /* A cluster of sibling goals linked by a shared metavariable */
 .hf .cluster {
   margin: 2px 0;
-  padding: 1px 4px 3px;
+  padding: 1px 0 3px 4px;
   border: 1px dashed color-mix(in srgb, var(--goal) 40%, transparent);
-  border-radius: 6px;
+  border-right: none;
+  border-radius: 6px 0 0 6px;
 }
 
 .hf .cluster-label {

@@ -189,6 +189,7 @@ function renderNode(n: Node, onClick: (clicked: Node) => Promise<void>)
             + "the tactic that fixed the shared metavariable was applied."}>
           ↩ #{n.originalId}
         </span>}
+      <span className="id">#{n.id}</span>
       {n.cache
         ? (n.cache.completed
           ? (n.kind === 'goal'
@@ -202,7 +203,6 @@ function renderNode(n: Node, onClick: (clicked: Node) => Promise<void>)
           : n.explored
             ? <span className="badge-explored" title="Already explored">•</span>
             : null}
-      <span className="id">#{n.id}</span>
     </div>
   )
 
