@@ -169,6 +169,12 @@ function renderNode(n: Node, onClick: (clicked: Node) => Promise<void>)
             + "the tactic that fixed the shared metavariable."}>
           ↪ #{n.redirectTo}
         </span>}
+      {n.kind === 'goal' && n.originalId !== undefined &&
+        <span className="redirect"
+          title={"Copied from #" + n.originalId + ", the goal superseded when "
+            + "the tactic that fixed the shared metavariable was applied."}>
+          ↩ #{n.originalId}
+        </span>}
       {n.cache
         ? (n.cache.completed
           ? (n.kind === 'goal'
