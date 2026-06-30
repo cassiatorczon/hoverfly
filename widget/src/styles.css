@@ -60,6 +60,43 @@
   background: none;
 }
 
+/* A cluster of sibling goals linked by a shared metavariable */
+.hf .cluster {
+  margin: 2px 0;
+  padding: 1px 4px 3px;
+  border: 1px dashed color-mix(in srgb, var(--goal) 40%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--goal) 5%, transparent);
+}
+
+.hf .cluster-label {
+  padding: 1px 6px;
+  font-size: 10px;
+  color: var(--vscode-descriptionForeground);
+  user-select: none;
+}
+
+/* An inactive (superseded) goal: greyed, not actionable */
+.hf .rowA.inactive {
+  cursor: default;
+  opacity: .55;
+}
+
+.hf .rowA.inactive:hover {
+  background: none;
+}
+
+.hf .rowA.inactive .disp {
+  text-decoration: line-through;
+  color: var(--vscode-disabledForeground);
+}
+
+.hf .rowA .redirect {
+  flex: none;
+  font-size: 10px;
+  color: var(--vscode-textLink-foreground);
+}
+
 .hf .err-wrap {
   position: relative;
 }

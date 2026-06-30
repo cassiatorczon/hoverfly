@@ -25,6 +25,10 @@ theorem demo_mini : 1 = 1 /\ 2 = 2 := by
   hoverfly
   sorry
 
+theorem demo_le_trans (a b c : Nat) (hab : a ≤ b) (hbc : b ≤ c) : a ≤ c := by
+  hoverfly
+  sorry
+
 theorem demo_simple (very_very_long_variable_name : Nat) :
   very_very_long_variable_name = 1 ->
   ¬(very_very_long_variable_name = 2) /\ 1 = very_very_long_variable_name := by

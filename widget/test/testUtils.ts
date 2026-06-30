@@ -23,6 +23,14 @@ export function tactic(id: number, display = 't' + id,
   }
 }
 
+export function cluster(id: number, children: Node[],
+  overrides: Partial<Node> = {}): Node {
+  return {
+    kind: 'cluster', id, display: '', completed: false, status: 'unselected',
+    visible: true, explored: false, cache: undefined, children, ...overrides
+  }
+}
+
 /* Tree queries */
 
 export function allNodes(n: Node): Node[] {
@@ -43,9 +51,10 @@ export function selectedIds(n: Node): number[] {
 
 /* Mock RPC session */
 
-// `responder(method, id)` returns the APINode children the backend would
-// produce for a `getApplicableTactics`/`getSubgoals` call on node `id`.
-export type Responder = (method: string, id: number) => APINode[]
+// `responder(method, id)` returns the children the backend would produce for a
+// call on node `id`: a flat `APINode[]` of tactics for `getApplicableTactics`,
+// or a clustered `APINode[][]` of subgoals for `getSubgoals`.
+export type Responder = (method: string, id: number) => APINode[] | APINode[][]
 
 export type MockRpc = {
   // Loosely typed so it can stand in for RpcSessionAtPos in tests.

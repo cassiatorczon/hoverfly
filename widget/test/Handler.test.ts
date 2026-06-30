@@ -1,7 +1,9 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { recomputeCompleted, selectRoot, Node } from '../src/Tree'
+import {
+  recomputeCompleted, recomputeInactive, isInactive, selectRoot, navChildren, Node
+} from '../src/Tree'
 import {
   handleClick,
   getApplicableTactics,
@@ -28,11 +30,12 @@ const foobarResponder: Responder = (method, id) => {
     if (id === 3) return [{ isGoal: false, id: 5, display: 'rfl' }]
     return []
   }
-  // Backend.getSubgoals
+  // Backend.getSubgoals returns clusters (one inner list per cluster). The two
+  // conjuncts share no metavariable, so they form two singleton clusters.
   if (id === 1) {
     return [
-      { isGoal: true, id: 2, display: '1 = 1' },
-      { isGoal: true, id: 3, display: '2 = 2' }
+      [{ isGoal: true, id: 2, display: '1 = 1' }],
+      [{ isGoal: true, id: 3, display: '2 = 2' }]
     ]
   }
   if (id === 4) return [] // rfl closes goal 2
@@ -70,7 +73,8 @@ test('descend: clicking a tactic expands its subgoals and marks it explored',
     assert.equal(tactic1.status, 'selected')
     assert.equal(tactic1.explored, true,
       'expanded tactic must be marked explored so completion is detectable')
-    assert.deepEqual(tactic1.children.map((c) => c.id), [2, 3])
+    // subgoals are wrapped in (singleton) cluster nodes; navChildren sees through
+    assert.deepEqual(navChildren(tactic1).map((c) => c.id), [2, 3])
     assert.equal(s.get().status, 'semiselected') // root demoted
     assert.equal(countSelected(s.get()), 1)
   })
@@ -152,4 +156,96 @@ test('proof completion propagates to the root, including across collapsed ' +
       'root (proof) is complete once both conjuncts are closed')
     // completion survived collapsing the first conjunct into its cache
     assert.equal(findById(derived, 2)!.completed, true)
+  })
+
+/* Metavariable clusters (design/metavariable-clusters.md worked example) */
+
+// goal 0 (w ≤ z) --apply le_trans--> cluster { goal 2 (w ≤ ?b), goal 3 (?b ≤ z) }
+// sharing ?b. Driving goal 2 with `exact h5` assigns ?b := 5 and carries the
+// still-open sibling goal 3 as a copy (id 6, `5 ≤ z`, originalId 3). Driving
+// goal 3 instead with `exact h7` carries goal 2 as a copy (id 9, originalId 2).
+const transResponder: Responder = (method, id) => {
+  if (method === 'Backend.getApplicableTactics') {
+    if (id === 0) return [{ isGoal: false, id: 1, display: 'apply le_trans' }]
+    if (id === 2) return [{ isGoal: false, id: 5, display: 'exact h5' }]
+    if (id === 3) return [{ isGoal: false, id: 8, display: 'exact h7' }]
+    if (id === 6) return [{ isGoal: false, id: 7, display: 'le_refl' }]
+    if (id === 9) return [{ isGoal: false, id: 10, display: 'le_refl' }]
+    return []
+  }
+  // Backend.getSubgoals
+  if (id === 1) {
+    return [[
+      { isGoal: true, id: 2, display: 'w ≤ ?b' },
+      { isGoal: true, id: 3, display: '?b ≤ z' }
+    ]]
+  }
+  if (id === 5) return [[{ isGoal: true, id: 6, display: '5 ≤ z', originalId: 3 }]]
+  if (id === 8) return [[{ isGoal: true, id: 9, display: 'w ≤ 7', originalId: 2 }]]
+  if (id === 7) return [] // closes the copy 5 ≤ z
+  if (id === 10) return [] // closes the copy w ≤ 7
+  return []
+}
+
+// Mirror the component's display derivation.
+const display = (n: Node) => recomputeCompleted(recomputeInactive(n))
+
+test('cluster: driving one goal inactivates its sibling and redirects', async () => {
+  const s = await makeSession(transResponder)
+  await s.click(1) // apply le_trans -> cluster { 2, 3 }
+  await s.click(2) // descend into w ≤ ?b
+  await s.click(5) // exact h5: assigns ?b := 5, carries copy 6 of sibling 3
+
+  const d = display(s.get())
+  const sibling = findById(d, 3)!
+  assert.equal(isInactive(sibling), true, 'the still-open sibling is inactivated')
+  assert.equal(sibling.redirectTo, 6, 'and points at the carried copy')
+  assert.equal(isInactive(findById(d, 6)!), false, 'the copy itself stays active')
+})
+
+test('cluster: completion is gated by the carried copy, not the original',
+  async () => {
+    const s = await makeSession(transResponder)
+    await s.click(1)
+    await s.click(2)
+    await s.click(5) // copy 6 (5 ≤ z) appears, still open
+
+    assert.equal(display(s.get()).completed, false,
+      'not complete while the carried copy is open')
+
+    await s.click(6) // descend into the copy
+    await s.click(7) // close it
+
+    assert.equal(display(s.get()).completed, true,
+      'closing the copy (a child of the driving tactic) completes the proof')
+  })
+
+test('cluster: backtracking off the driving tactic reactivates the sibling',
+  async () => {
+    const s = await makeSession(transResponder)
+    await s.click(1)
+    await s.click(2)
+    await s.click(5) // sibling 3 inactivated
+    assert.equal(isInactive(findById(display(s.get()), 3)!), true)
+
+    await s.click(2) // backtrack to w ≤ ?b: caches the driving tactic (+copy)
+
+    assert.equal(isInactive(findById(display(s.get()), 3)!), false,
+      'with the copy stashed in cache, the sibling is active again')
+  })
+
+test('cluster: roles flip when the other sibling drives the assignment',
+  async () => {
+    const s = await makeSession(transResponder)
+    await s.click(1)
+    await s.click(2)
+    await s.click(5) // drive from goal 2 -> goal 3 inactive
+    await s.click(2) // backtrack
+    await s.click(3) // switch to the sibling ?b ≤ z
+    await s.click(8) // exact h7: assigns ?b := 7, carries copy 9 of goal 2
+
+    const d = display(s.get())
+    assert.equal(isInactive(findById(d, 2)!), true, 'now the first goal is inactive')
+    assert.equal(findById(d, 2)!.redirectTo, 9)
+    assert.equal(isInactive(findById(d, 3)!), false, 'and the driver is active')
   })

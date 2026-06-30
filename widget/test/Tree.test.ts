@@ -4,14 +4,17 @@ import assert from 'node:assert/strict'
 import {
   recomputeCompleted,
   recomputeVisible,
+  recomputeInactive,
+  isInactive,
   cacheChild,
   nearestCommonAncestorWithSelected,
+  navChildren,
   updateNodes,
   changeStatusAtId,
   changeStatusAtSelected,
   selectRoot
 } from '../src/Tree'
-import { goal, tactic, findById } from './testUtils'
+import { goal, tactic, cluster, findById } from './testUtils'
 
 /* recomputeCompleted */
 
@@ -105,6 +108,68 @@ test('recomputeCompleted: a collapsed tactic alternative does not count', () => 
     status: 'selected', children: [collapsedAlt, liveAlt]
   })
   assert.equal(recomputeCompleted(root).completed, false)
+})
+
+/* recomputeInactive */
+
+// The worked example:
+//   goal0 -le_trans-> cluster{ goal2 (w ≤ ?b), goal3 (?b ≤ z) }
+// Driving goal2 with a tactic that assigns ?b carries goal3 as a copy (id 6,
+// originalId 3) under that tactic.
+function transTree(copyUnderCache = false): ReturnType<typeof goal> {
+  const copy = goal(6, '5 ≤ z', { originalId: 3 })
+  const drivingTactic = tactic(5, 'exact h5', {
+    explored: true, children: [cluster(-7, [copy])]
+  })
+  const goal2 = copyUnderCache
+    ? goal(2, 'w ≤ ?b', {
+      explored: true, children: [],
+      cache: goal(2, 'w ≤ ?b', { children: [drivingTactic] })
+    })
+    : goal(2, 'w ≤ ?b', { children: [drivingTactic] })
+  return goal(0, 'w ≤ z', {
+    children: [tactic(1, 'apply le_trans', {
+      explored: true, children: [cluster(-3, [goal2, goal3()])]
+    })]
+  })
+}
+function goal3() { return goal(3, '?b ≤ z') }
+
+test('recomputeInactive: a live copy inactivates its original and redirects',
+  () => {
+    const r = recomputeInactive(transTree())
+    const original = findById(r, 3)!
+    assert.equal(isInactive(original), true)
+    assert.equal(original.redirectTo, 6, 'original points at the copy')
+    // the copy itself stays active, as do unrelated goals
+    assert.equal(isInactive(findById(r, 6)!), false)
+    assert.equal(isInactive(findById(r, 2)!), false)
+  })
+
+test('recomputeInactive: an inactive original counts as completed', () => {
+  // its obligation has moved to the copy, so it must not block its parent
+  const r = recomputeCompleted(recomputeInactive(transTree()))
+  assert.equal(findById(r, 3)!.completed, true)
+})
+
+test('recomputeInactive: a copy stashed in a cache does not inactivate (backtrack)',
+  () => {
+    // Backtracking collapses the copy-bearing branch into a `cache`; the copy is
+    // then off the live tree, so its original reactivates — no stored state.
+    const r = recomputeInactive(transTree(true))
+    assert.equal(isInactive(findById(r, 3)!), false)
+  })
+
+/* navChildren */
+
+test('navChildren: sees goals nested in clusters as a tactic\'s children', () => {
+  const t = tactic(1, 'apply le_trans', {
+    children: [cluster(-2, [goal(2), goal(3)]), cluster(-4, [goal(4)])]
+  })
+  assert.deepEqual(navChildren(t).map((c) => c.id), [2, 3, 4])
+  // a goal's children (tactics) are returned as-is
+  const g = goal(0, 'g', { children: [tactic(1), tactic(2)] })
+  assert.deepEqual(navChildren(g).map((c) => c.id), [1, 2])
 })
 
 /* recomputeVisible */

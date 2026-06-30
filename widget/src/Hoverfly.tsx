@@ -1,4 +1,4 @@
-import { useState, useEffect, useContext, useRef } from 'react'
+import { useState, useEffect, useContext, useRef, Fragment } from 'react'
 import {
   useRpcSession,
   useAsync,
@@ -19,8 +19,10 @@ import {
 import {
   Node,
   selectRoot,
+  isInactive,
   recomputeCompleted,
-  recomputeVisible
+  recomputeVisible,
+  recomputeInactive
 } from './Tree'
 import {
   APIData,
@@ -63,16 +65,17 @@ function HoverError({ message, children }: {
   )
 }
 
-function renderNode(n: Node, onClick: (clicked: Node) => Promise<void>)
+function renderChildren(n: Node, onClick: (clicked: Node) => Promise<void>)
   : React.ReactNode {
-  if (!n.visible) {
-    return null
-  }
+  if (n.children.length === 0) return null
 
-  const marker = n.kind === 'goal' ? '⊢' : '▸'
-  const failed = n.kind === 'tactic' && n.tacticError !== undefined
-  const successClass = n.kind === 'tactic'
-    ? (n.tacticError === undefined ? 'succeeds' : 'fails') : ''
+  if (n.kind !== 'goal') {
+    return (
+      <ul className="failing-children">
+        {n.children.map((child: Node) => renderNode(child, onClick))}
+      </ul>
+    )
+  }
 
   const isFailingTactic = (c: Node) =>
     c.kind === 'tactic' && c.tacticError !== undefined
@@ -85,11 +88,87 @@ function renderNode(n: Node, onClick: (clicked: Node) => Promise<void>)
   const failingChildren =
     n.children.filter((c: Node) => isFailingTactic(c) && c.visible)
 
+  return (
+    <ul className="failing-children">
+      {mainChildren.map((child: Node) => renderNode(child, onClick))}
+      {noopChildren.length > 0 &&
+        <li>
+          <details className="failing-group">
+            <summary>
+              {noopChildren.length} no-op{' '}
+              {noopChildren.length === 1 ? 'tactic' : 'tactics'}
+            </summary>
+            <ul className="failing-children">
+              {noopChildren.map((child: Node) => renderNode(child, onClick))}
+            </ul>
+          </details>
+        </li>}
+      {failingChildren.length > 0 &&
+        <li>
+          <details className="failing-group">
+            <summary>
+              {failingChildren.length} failing{' '}
+              {failingChildren.length === 1 ? 'tactic' : 'tactics'}
+            </summary>
+            <ul className="failing-children">
+              {failingChildren.map((child: Node) => renderNode(child, onClick))}
+            </ul>
+          </details>
+        </li>}
+    </ul>
+  )
+}
+
+function renderNode(n: Node, onClick: (clicked: Node) => Promise<void>)
+  : React.ReactNode {
+  if (!n.visible) {
+    return null
+  }
+
+  // A cluster is a visual grouping of sibling goals linked by a shared
+  // metavariable. Singletons render transparently (just the goal); a real
+  // cluster (≥2 goals) gets a labelled box.
+  if (n.kind === 'cluster') {
+    if (n.children.length <= 1) {
+      return (
+        <Fragment key={n.id}>
+          {n.children.map((child: Node) => renderNode(child, onClick))}
+        </Fragment>
+      )
+    }
+    return (
+      <li key={n.id}>
+        <div className="cluster">
+          <div className="cluster-label">
+            linked goals — share a metavariable
+          </div>
+          <ul className="failing-children">
+            {n.children.map((child: Node) => renderNode(child, onClick))}
+          </ul>
+        </div>
+      </li>
+    )
+  }
+
+  const marker = n.kind === 'goal' ? '⊢' : '▸'
+  const failed = n.kind === 'tactic' && n.tacticError !== undefined
+  const successClass = n.kind === 'tactic'
+    ? (n.tacticError === undefined ? 'succeeds' : 'fails') : ''
+  const inactive = isInactive(n)
+  const clickable = !failed && !inactive
+
   const row = (
-    <div className={`rowA ${n.kind} ${n.status} ${successClass}`}
-      onClick={failed ? undefined : () => onClick(n)}>
+    <div className={`rowA ${n.kind} ${n.status} ${successClass}`
+      + (inactive ? ' inactive' : '')}
+      onClick={clickable ? () => onClick(n) : undefined}>
       <span className="marker">{marker}</span>
       <span className="disp">{n.display}</span>
+      {n.redirectTo !== undefined &&
+        <span className="redirect"
+          title={"This goal continues as #" + n.redirectTo + ", carried under "
+            + "the tactic that fixed the shared metavariable."}>
+          ↪ #{n.redirectTo}
+        </span>}
       {n.cache
         ? (n.cache.completed
           ? (n.kind === 'goal'
@@ -98,7 +177,7 @@ function renderNode(n: Node, onClick: (clicked: Node) => Promise<void>)
               title="A completed proof is stored here — go back to finish">★</span>)
           : <span className="badge-cached"
             title="Cached — progress stored, no full proof yet">☆</span>)
-        : n.completed
+        : n.completed && !inactive
           ? <span className="badge-done" title="Completed">✓</span>
           : n.explored
             ? <span className="badge-explored" title="Already explored">•</span>
@@ -112,36 +191,7 @@ function renderNode(n: Node, onClick: (clicked: Node) => Promise<void>)
       {failed && n.tacticError
         ? <HoverError message={n.tacticError}>{row}</HoverError>
         : row}
-      {n.children.length > 0 &&
-        <ul className="failing-children">
-          {mainChildren.map((child: Node) => renderNode(child, onClick))}
-          {noopChildren.length > 0 &&
-            <li>
-              <details className="failing-group">
-                <summary>
-                  {noopChildren.length} no-op{' '}
-                  {noopChildren.length === 1 ? 'tactic' : 'tactics'}
-                </summary>
-                <ul className="failing-children">
-                  {noopChildren.map((child: Node) =>
-                    renderNode(child, onClick))}
-                </ul>
-              </details>
-            </li>}
-          {failingChildren.length > 0 &&
-            <li>
-              <details className="failing-group">
-                <summary>
-                  {failingChildren.length} failing{' '}
-                  {failingChildren.length === 1 ? 'tactic' : 'tactics'}
-                </summary>
-                <ul className="failing-children">
-                  {failingChildren.map((child: Node) =>
-                    renderNode(child, onClick))}
-                </ul>
-              </details>
-            </li>}
-        </ul>}
+      {renderChildren(n, onClick)}
     </li>
   )
 }
@@ -204,10 +254,13 @@ function Hoverfly(props: HoverflyProps) {
         await handleClick(current.node, current.stateRef, n, rs, props.pos))
     }
 
-    // `completed` and `visible` are derived from tree structure, so compute a
-    // fresh display copy here rather than threading them through every click.
-    // Click logic still operates on `current.node` (the source of truth) above.
-    const displayRoot = recomputeVisible(recomputeCompleted(current.node))
+    // `inactive`, `completed`, and `visible` are all derived from tree
+    // structure, so compute a fresh display copy here rather than threading them
+    // through every click. Order matters: `recomputeCompleted` reads `inactive`
+    // (an inactive original counts as discharged). Click logic still operates on
+    // `current.node` (the source of truth) above.
+    const displayRoot =
+      recomputeVisible(recomputeCompleted(recomputeInactive(current.node)))
     return <><HoverflyTree root={displayRoot} onClick={onClick} /></>
   }
 }

@@ -3,6 +3,7 @@ import {
   Node,
   assert,
   nearestCommonAncestorWithSelected,
+  navChildren,
   cacheChild,
   updateNodes,
   changeStatusAtSelected,
@@ -19,6 +20,7 @@ export type APINode = {
   display: string
   tacticError: string | null
   noop: boolean
+  originalId?: number | null
 }
 
 export type NodeAndStateRef = { node: Node, stateRef: APIData }
@@ -31,9 +33,11 @@ export function APINodeToNode(n: APINode): Node {
       display: n.display,
       tacticError: undefined,
       noop: false,
+      originalId: n.originalId ?? undefined,
       completed: false,
       status: 'unselected',
       visible: true,
+      redirectTo: undefined,
       explored: false,
       cache: undefined,
       children: []
@@ -45,13 +49,35 @@ export function APINodeToNode(n: APINode): Node {
       display: n.display,
       tacticError: n.tacticError ?? undefined,
       noop: n.noop,
+      originalId: undefined,
       completed: false,
       status: 'unselected',
       visible: true,
+      redirectTo: undefined,
       explored: false,
       cache: undefined,
       children: []
     }
+  }
+}
+
+function APIClusterToNode(goals: APINode[]): Node {
+  const children = goals.map(APINodeToNode)
+  const ids = children.map((c) => c.id)
+  return {
+    kind: 'cluster',
+    id: ids.length > 0 ? -1 - Math.min(...ids) : -1,
+    display: '',
+    tacticError: undefined,
+    noop: false,
+    originalId: undefined,
+    completed: false,
+    status: 'unselected',
+    visible: true,
+    redirectTo: undefined,
+    explored: false,
+    cache: undefined,
+    children
   }
 }
 
@@ -83,13 +109,13 @@ export async function getSubgoals(
 
   assert(n.kind == 'tactic', "Called getSubgoals on goal node " + n.id)
 
-  // get subgoal list
+  // get subgoal list, grouped into clusters (one inner list per cluster)
   const params = { id: n.id, stateRef: stateRef, pos: pos }
   const [clusters, newStateRef]: [APINode[][], APIData] =
     await rs.call("Backend.getSubgoals", params)
-  const tsxGoals = clusters.flat().map(APINodeToNode) // TODO: Don't flatten clusters
+  const tsxClusters = clusters.map(APIClusterToNode)
 
-  return { node: { ...n, children: tsxGoals }, stateRef: newStateRef }
+  return { node: { ...n, children: tsxClusters }, stateRef: newStateRef }
 }
 
 export async function handleClick(
@@ -129,8 +155,9 @@ export async function handleClick(
       " clicked node " + clicked.id + ".")
 
     // if the previous node was a non-parent ancestor, the
-    // current node should never have been clickable
-    assert(nca.children.some((c: Node) => c.id === clicked.id),
+    // current node should never have been clickable (navChildren sees through
+    // cluster wrappers, so a goal nested in a cluster still counts as a child)
+    assert(navChildren(nca).some((c: Node) => c.id === clicked.id),
       "Non-child descendant of selected node should not be clickable.")
 
     // change parent to semiselected
@@ -181,8 +208,8 @@ export async function handleClick(
       "previously selected node and vice versa. Nearest common ancestor: " +
       nca.id + ".")
 
-    // new node should be an immediate child of nca
-    assert(nca.children.some((c: Node) => c.id === clicked.id),
+    // new node should be an immediate (navigational) child of nca
+    assert(navChildren(nca).some((c: Node) => c.id === clicked.id),
       "Non-child descendant of nearest common ancestor of previously " +
       "selected node and newly clicked node node should not be clickable.")
 

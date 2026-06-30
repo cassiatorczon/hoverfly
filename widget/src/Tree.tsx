@@ -1,20 +1,22 @@
 
 type ID = number
 
-type Kind = "tactic" | "goal"
+type Kind = "tactic" | "goal" | "cluster"
 
 type Status = "selected" | "semiselected" | "unselected"
 
 type MutableNode = {
-  kind: Kind, // tactic or goal
+  kind: Kind, // tactic, goal, or cluster
   id: ID, // should be unique among all nodes; must have an immutable type
   display: string, // display
   tacticError: string | undefined, // for failing tactics: why it failed; undefined ⇒ succeeded (or goal)
   noop: boolean, // for tactics: succeeded but left the proof state unchanged
+  originalId: ID | undefined, // the ID of the node this has been copied from, if applicable
   completed: boolean, // a completed goal or tactic with all completed subgoals
-  children: Node[], // applicable tactics for a goal, subgoals for a tactic
+  children: Node[], // applicable tactics for a goal, clusters for a tactic, goals for a cluster
   status: Status, // display information
   visible: boolean, // visibility in display
+  redirectTo: ID | undefined, // if this goal has been copied, what has it been copied to
   explored: boolean, // whether the node has been explored
   cache: Node | undefined // previous version of the subtree rooted at this node
 }
@@ -134,6 +136,16 @@ export async function changeStatusAtId(root: Node, id: ID, newStatus: Status): P
   return updateNodes(root, update, pred);
 }
 
+export function navChildren(n: Node): Node[] {
+  return n.children.flatMap((c: Node) =>
+    c.kind === 'cluster' ? c.children : [c])
+}
+
+function selectedChild(n: Node): Node | undefined {
+  return navChildren(n).find(
+    (c: Node) => c.status === 'selected' || c.status === 'semiselected')
+}
+
 function cacheIfSelected(n: Node): Node {
   if (n.status === 'selected' || n.status === 'semiselected') {
     return { ...n, status: 'unselected', cache: n, children: [] }
@@ -142,8 +154,15 @@ function cacheIfSelected(n: Node): Node {
 }
 
 export function cacheChild(n: Node): Node {
-  let newChildren = n.children.map((c: Node) => cacheIfSelected(c))
+  let newChildren = n.children.map((c: Node) =>
+    c.kind === 'cluster'
+      ? { ...c, children: c.children.map(cacheIfSelected) }
+      : cacheIfSelected(c))
   return { ...n, children: newChildren }
+}
+
+export function isInactive(n: Node): boolean {
+  return n.redirectTo !== undefined
 }
 
 // Recompute the `completed` flag for every node from the structure of the
@@ -154,7 +173,15 @@ export function recomputeCompleted(n: Node): Node {
   const cache = n.cache ? recomputeCompleted(n.cache) : undefined
 
   let completed: boolean
-  if (children.length === 0 && cache) {
+  if (n.kind === 'cluster') {
+    // A cluster's goals must all be discharged (AND), like a tactic's subgoals.
+    completed = children.every((c: Node) => c.completed)
+  } else if (n.kind === 'goal' && isInactive(n)) {
+    // An inactive goal has been superseded by a live copy under the driving
+    // tactic; that copy carries the obligation and is gated by a sibling branch,
+    // so this original counts as discharged here.
+    completed = true
+  } else if (children.length === 0 && cache) {
     // A cached goal is completed if the cached tree is completed; a cached
     // tactic is _never_ completed, since caching it means we've moved away
     // from it.
@@ -166,6 +193,30 @@ export function recomputeCompleted(n: Node): Node {
   }
 
   return { ...n, children, cache, completed }
+}
+
+// Recompute the `redirectTo` pointer (and hence `isInactive`)
+// from structure, like `completed`. When a tactic assigns a metavariable shared
+// across a cluster, the backend carries the still-open sibling goals as *copy*
+// children of that tactic, each tagged with the `originalId` of the sibling it
+// copies. On the active path the original sibling is then superseded: greyed,
+// non-actionable, its obligation moved to the copy.
+export function recomputeInactive(root: Node): Node {
+  const redirect = new Map<ID, ID>()
+  const collect = (n: Node): void => {
+    for (const c of n.children) {
+      if (c.originalId !== undefined) redirect.set(c.originalId, c.id)
+      collect(c)
+    }
+  }
+  collect(root)
+
+  const annotate = (n: Node): Node => ({
+    ...n,
+    redirectTo: redirect.get(n.id),
+    children: n.children.map(annotate)
+  })
+  return annotate(root)
 }
 
 // Recompute the `visible` flag for every node. Once a tactic is chosen (one of
@@ -202,8 +253,7 @@ function isNonstrictAncestorOf(parentCand: Node, childId: ID)
 
 export function nearestCommonAncestorWithSelected(n: Node, id: ID):
   Readonly<Node> {
-  const selectedNonstrictAncestor = n.children.find(
-    (c: Node) => c.status === 'semiselected' || c.status === 'selected')
+  const selectedNonstrictAncestor = selectedChild(n)
   if (selectedNonstrictAncestor) {
     if (isNonstrictAncestorOf(selectedNonstrictAncestor, id)) {
       return selectedNonstrictAncestor.id === id
