@@ -11,10 +11,15 @@ open Gen.CorrectGen
 def StateId := Nat
   deriving OfNat, BEq, Hashable, ToJson, FromJson, HAdd
 
+structure ClusterInfo where
+  members : List StateId
+  sharedMVars : List MVarId
+
 structure State where
   nodeCounter : StateId := 0
   goalMap : Std.HashMap StateId (MVarId × Elab.Term.SavedState) := ∅
   tacticMap : Std.HashMap StateId (Syntax × StateId) := ∅
+  clusterMap : Std.HashMap StateId ClusterInfo := ∅
   deriving TypeName
 
 structure APINode where
@@ -50,6 +55,15 @@ def getGoalClusters (goals : List MVarId) : MetaM (List (List MVarId)) := do
   let singles :=
     (mvarGoalLists.filter fun (g, _) => !touched.contains g).map (fun (g, _) => [g])
   return grouped ++ singles
+
+def unassignedDeps (g : MVarId) : MetaM (List MVarId) := do
+  let deps ← g.getMVarDependencies
+  deps.toList.filterM fun m => do return !(← m.isAssigned)
+
+def sharedMVars (goals : List MVarId) : MetaM (List MVarId) := do
+  let deps ← goals.mapM unassignedDeps
+  let occursInTwo m := (deps.filter (·.contains m)).length ≥ 2
+  return deps.flatten.eraseDups.filter occursInTwo
 
 -- TODO there's got to be a better function for this already
 def showGoal (mvarId : MVarId) : MetaM String := do
@@ -92,7 +106,7 @@ def getSubgoals
   RequestM.withWaitFindSnapAtPos _params.pos fun snap => do
     RequestM.runTermElabM snap do
       -- get counter and maps
-      let {nodeCounter, goalMap, tacticMap}
+      let {nodeCounter, goalMap, tacticMap, clusterMap}
         := _params.stateRef.val
 
       -- get syntax and id of parent goal for tactic
@@ -124,19 +138,25 @@ def getSubgoals
                 let goalInfo := (mvarId, newProofState)
                 let newMap := tempGoalMap.insert c goalInfo
                 return (apiNode :: nodes, newMap, c + 1)
-            let g (t : List (List APINode) × Std.HashMap StateId (MVarId × Elab.Term.SavedState) × StateId) mvarIds :=
+            let g (t : List (List APINode)
+                    × Std.HashMap StateId (MVarId × Elab.Term.SavedState)
+                    × Std.HashMap StateId ClusterInfo × StateId) mvarIds :=
               match t with
-              | (gss, goalMap, count) => do
+              | (gss, goalMap, clusterMap, count) => do
                 let (gs, newMap, newCount) ← mvarIds.foldlM f ([], goalMap, count)
-                return (gs :: gss, newMap, newCount)
-            let (goals, newGoalMap, newCounter) ←
-              clusters.foldlM g ([], goalMap, nodeCounter)
+                let members := gs.map (·.id)
+                let info : ClusterInfo := { members, sharedMVars := ← sharedMVars mvarIds }
+                let newClusterMap := members.foldl (·.insert · info) clusterMap
+                return (gs :: gss, newMap, newClusterMap, newCount)
+            let (goals, newGoalMap, newClusterMap, newCounter) ←
+              clusters.foldlM g ([], goalMap, clusterMap, nodeCounter)
 
             -- update state
             let newState ← WithRpcRef.mk {
                 nodeCounter := newCounter
                 goalMap := newGoalMap,
-                tacticMap := tacticMap
+                tacticMap := tacticMap,
+                clusterMap := newClusterMap
               }
 
             pure (goals, newState)
@@ -213,7 +233,7 @@ def getApplicableTactics
   RequestM.withWaitFindSnapAtPos _params.pos fun snap => do
     RequestM.runTermElabM snap do
       -- get counter and maps
-      let {nodeCounter, goalMap, tacticMap}
+      let {nodeCounter, goalMap, tacticMap, clusterMap}
         := _params.stateRef.val
 
       -- get mvarId and proof state for goal (TODO: necessary?)
@@ -269,11 +289,12 @@ def getApplicableTactics
           failingResults.foldl f
             (tacticsSuccess, newTacticMapSuccess, newCounterSuccess)
 
-        -- update state
+        -- update state (cluster membership is unchanged by tactic expansion)
         let newState ← WithRpcRef.mk {
             nodeCounter := newCounterAll
             goalMap := goalMap,
-            tacticMap := newTacticMapAll
+            tacticMap := newTacticMapAll,
+            clusterMap := clusterMap
           }
 
         pure (tacticsAll, newState)

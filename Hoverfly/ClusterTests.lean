@@ -88,4 +88,44 @@ run_cmd liftTermElabM do
   let cs ← getGoalClusters []
   expectCount "empty" cs 0
 
+/- `sharedMVars` reports a directly shared metavariable. -/
+run_cmd liftTermElabM do
+  let b ← natMVar
+  let g1 ← eqGoal (mkMVar b) (mkNatLit 0)
+  let g2 ← eqGoal (mkMVar b) (mkNatLit 1)
+  let ms ← sharedMVars [g1, g2]
+  unless ms == [b] do
+    throwError "sharedMVars shared: expected [?b], got {ms.map (·.name)}"
+
+/- `sharedMVars` ignores a metavariable that occurs in only one goal. -/
+run_cmd liftTermElabM do
+  let b ← natMVar
+  let c ← natMVar
+  let g1 ← eqGoal (mkMVar b) (mkNatLit 0)
+  let g2 ← eqGoal (mkMVar c) (mkNatLit 1)
+  let ms ← sharedMVars [g1, g2]
+  unless ms.isEmpty do
+    throwError "sharedMVars independent: expected [], got {ms.map (·.name)}"
+
+/- `sharedMVars` reports both link metavariables of a transitive chain. -/
+run_cmd liftTermElabM do
+  let b ← natMVar
+  let c ← natMVar
+  let g1 ← eqGoal (mkMVar b) (mkNatLit 0)
+  let g2 ← eqGoal (mkMVar b) (mkMVar c)
+  let g3 ← eqGoal (mkMVar c) (mkNatLit 1)
+  let ms ← sharedMVars [g1, g2, g3]
+  unless ms.contains b && ms.contains c && ms.length == 2 do
+    throwError "sharedMVars chain: expected both ?b and ?c, got {ms.map (·.name)}"
+
+/- `sharedMVars` ignores an assigned metavariable. -/
+run_cmd liftTermElabM do
+  let b ← natMVar
+  let g1 ← eqGoal (mkMVar b) (mkNatLit 0)
+  let g2 ← eqGoal (mkMVar b) (mkNatLit 1)
+  b.assign (mkNatLit 5)
+  let ms ← sharedMVars [g1, g2]
+  unless ms.isEmpty do
+    throwError "sharedMVars assigned: expected [], got {ms.map (·.name)}"
+
 end Backend.ClusterTests
