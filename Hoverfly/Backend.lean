@@ -66,6 +66,11 @@ def sharedMVars (goals : List MVarId) : MetaM (List MVarId) := do
   let occursInTwo m := (deps.filter (·.contains m)).length ≥ 2
   return deps.flatten.eraseDups.filter occursInTwo
 
+def dropMVarGoals (goals : List MVarId) : MetaM (List MVarId) :=
+  goals.filterM fun g => do
+    let others := goals.filter (· != g)
+    return !(← others.anyM fun g' => do return (← unassignedDeps g').contains g)
+
 def carriedSiblings
     (clusterMap : Std.HashMap StateId ClusterInfo)
     (goalMap : Std.HashMap StateId (MVarId × Elab.Term.SavedState))
@@ -139,9 +144,10 @@ def getSubgoals
 
           try
             -- run tactic
-            let result : List Lean.MVarId <- Elab.Term.withoutErrToSorry do
+            let rawResult : List Lean.MVarId <- Elab.Term.withoutErrToSorry do
               Lean.Elab.Tactic.run mvarId do
                 Lean.Elab.Tactic.evalTactic stx
+            let result ← dropMVarGoals rawResult
 
             let copies ← carriedSiblings clusterMap goalMap parentId
             let copyOf : Std.HashMap MVarId StateId :=

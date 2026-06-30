@@ -128,6 +128,26 @@ run_cmd liftTermElabM do
   unless ms.isEmpty do
     throwError "sharedMVars assigned: expected [], got {ms.map (·.name)}"
 
+/- `dropMVarGoals` removes the shared metavariable when it is itself a goal. -/
+run_cmd liftTermElabM do
+  let b ← natMVar
+  let g1 ← eqGoal (mkMVar b) (mkNatLit 0)
+  let g2 ← eqGoal (mkMVar b) (mkNatLit 1)
+  -- `b` itself stands in for the `⊢ ℕ` goal that e.g. `apply Nat.le_trans` leaves
+  let kept ← dropMVarGoals [g1, g2, b]
+  unless kept == [g1, g2] do
+    throwError "dropMVarGoals: expected [g1, g2], got {kept.map (·.name)}"
+
+/- `dropMVarGoals` keeps independent goals (none is a sibling's dependency). -/
+run_cmd liftTermElabM do
+  let b ← natMVar
+  let c ← natMVar
+  let g1 ← eqGoal (mkMVar b) (mkNatLit 0)
+  let g2 ← eqGoal (mkMVar c) (mkNatLit 1)
+  let kept ← dropMVarGoals [g1, g2]
+  unless kept == [g1, g2] do
+    throwError "dropMVarGoals independent: expected [g1, g2], got {kept.map (·.name)}"
+
 /-- A two-goal cluster: goal 0 (`g1`) and goal 1 (`g2`) share `?b`. Returns the
 maps `getSubgoals` would hold, sharing one saved state across both goals. -/
 private def twoGoalCluster (b g1 g2 : MVarId) : Lean.Elab.TermElabM
