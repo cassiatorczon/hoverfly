@@ -1,4 +1,6 @@
-import { useState, useEffect, useContext, useRef, Fragment } from 'react'
+import {
+  useState, useEffect, useLayoutEffect, useRef, Fragment
+} from 'react'
 import {
   useRpcSession,
   useAsync,
@@ -119,6 +121,17 @@ function renderChildren(n: Node, onClick: (clicked: Node) => Promise<void>)
   )
 }
 
+const PAIR_STROKE = 'var(--vscode-textLink-foreground)'
+
+type PairLink = { from: number, to: number, key: number }
+function collectPairs(n: Node, acc: PairLink[] = []): PairLink[] {
+  if (n.redirectTo !== undefined) {
+    acc.push({ from: n.id, to: n.redirectTo, key: n.id })
+  }
+  n.children.forEach((c: Node) => collectPairs(c, acc))
+  return acc
+}
+
 function renderNode(n: Node, onClick: (clicked: Node) => Promise<void>)
   : React.ReactNode {
   if (!n.visible) {
@@ -160,6 +173,7 @@ function renderNode(n: Node, onClick: (clicked: Node) => Promise<void>)
   const row = (
     <div className={`rowA ${n.kind} ${n.status} ${successClass}`
       + (inactive ? ' inactive' : '')}
+      data-node-id={n.id}
       onClick={clickable ? () => onClick(n) : undefined}>
       <span className="marker">{marker}</span>
       <span className="disp">{n.display}</span>
@@ -202,10 +216,67 @@ function renderNode(n: Node, onClick: (clicked: Node) => Promise<void>)
   )
 }
 
+type DrawnLink = { d: string, head: string, color: string }
+
 function HoverflyTree({ root, onClick }: {
   root: Node, onClick: (n: Node) =>
     Promise<void>
 },) {
+  const treeRef = useRef<HTMLDivElement>(null)
+  const [links, setLinks] = useState<DrawnLink[]>([])
+  const [size, setSize] = useState<{ w: number, h: number }>({ w: 0, h: 0 })
+
+  // Layout effect to render arrows connecting copied goals
+  useLayoutEffect(() => {
+    const container = treeRef.current
+    if (!container) return
+
+    const compute = () => {
+      const cRect = container.getBoundingClientRect()
+      const rel = (el: Element) => {
+        const r = el.getBoundingClientRect()
+        return {
+          left: r.left - cRect.left + container.scrollLeft,
+          top: r.top - cRect.top + container.scrollTop,
+          height: r.height
+        }
+      }
+
+      const drawn: DrawnLink[] = []
+      collectPairs(root).forEach((p: PairLink, i: number) => {
+        const a = container.querySelector(`[data-node-id="${p.from}"]`)
+        const b = container.querySelector(`[data-node-id="${p.to}"]`)
+        if (!a || !b) return
+        const ra = rel(a), rb = rel(b)
+        const startX = ra.left, startY = ra.top + ra.height / 2
+        const endX = rb.left, endY = rb.top + rb.height / 2
+        // Each pair gets its own channel so multiple connectors don't overlap.
+        const channelX = Math.max(2, Math.min(ra.left, rb.left) - 10 - i * 6)
+        drawn.push({
+          d: `M ${startX} ${startY} H ${channelX} V ${endY} H ${endX}`,
+          head: `M ${endX} ${endY} L ${endX - 6} ${endY - 3} `
+            + `L ${endX - 6} ${endY + 3} Z`,
+          color: PAIR_STROKE
+        })
+      })
+
+      setLinks(drawn)
+      const w = container.scrollWidth, h = container.scrollHeight
+      setSize((prev) => prev.w === w && prev.h === h ? prev : { w, h })
+    }
+
+    compute()
+    const ro = new ResizeObserver(compute)
+    ro.observe(container)
+    container.addEventListener('scroll', compute)
+    window.addEventListener('resize', compute)
+    return () => {
+      ro.disconnect()
+      container.removeEventListener('scroll', compute)
+      window.removeEventListener('resize', compute)
+    }
+  }, [root])
+
   return (
     <div className="hf">
       <style>{hoverflyStyles}</style>
@@ -213,7 +284,14 @@ function HoverflyTree({ root, onClick }: {
         <div className="banner-done">
           ✓ Proof complete — a closing tactic sequence has been found.
         </div>}
-      <div className="treeA">
+      <div className="treeA" ref={treeRef}>
+        <svg className="pair-arrows" width={size.w} height={size.h}>
+          {links.map((l: DrawnLink, i: number) =>
+            <g key={i} stroke={l.color} fill="none">
+              <path d={l.d} strokeWidth={1.5} />
+              <path d={l.head} fill={l.color} stroke="none" />
+            </g>)}
+        </svg>
         <ul>
           {renderNode(root, onClick)}
         </ul>

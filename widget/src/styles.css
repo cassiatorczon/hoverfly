@@ -19,6 +19,21 @@
 
 .hf .treeA {
   padding: 2px 10px 6px;
+  position: relative;
+}
+
+.hf .pair-arrows {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.hf .treeA>ul {
+  position: relative;
+  z-index: 1;
 }
 
 .hf .treeA ul {
@@ -66,7 +81,6 @@
   padding: 1px 4px 3px;
   border: 1px dashed color-mix(in srgb, var(--goal) 40%, transparent);
   border-radius: 6px;
-  background: color-mix(in srgb, var(--goal) 5%, transparent);
 }
 
 .hf .cluster-label {
