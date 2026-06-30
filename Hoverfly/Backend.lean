@@ -28,6 +28,7 @@ structure APINode where
   display : String
   tacticError : Option String := none
   noop : Bool := false
+  originalId : Option StateId := none
   deriving ToJson, FromJson
 
 structure GetSubgoalsParams where
@@ -64,6 +65,22 @@ def sharedMVars (goals : List MVarId) : MetaM (List MVarId) := do
   let deps ← goals.mapM unassignedDeps
   let occursInTwo m := (deps.filter (·.contains m)).length ≥ 2
   return deps.flatten.eraseDups.filter occursInTwo
+
+def carriedSiblings
+    (clusterMap : Std.HashMap StateId ClusterInfo)
+    (goalMap : Std.HashMap StateId (MVarId × Elab.Term.SavedState))
+    (parentId : StateId) : MetaM (List (MVarId × StateId)) := do
+  match clusterMap.get? parentId with
+  | none => return []
+  | some ⟨members, sharedMVars⟩ =>
+    if !(← sharedMVars.anyM (·.isAssigned)) then
+      return []
+    let siblingIds := members.filter (· != parentId)
+    siblingIds.filterMapM fun sid => do
+      match goalMap.get? sid with
+      | none => return none
+      | some (smv, _) =>
+        if ← smv.isAssigned then return none else return some (smv, sid)
 
 -- TODO there's got to be a better function for this already
 def showGoal (mvarId : MVarId) : MetaM String := do
@@ -125,7 +142,11 @@ def getSubgoals
             let result : List Lean.MVarId <- Elab.Term.withoutErrToSorry do
               Lean.Elab.Tactic.run mvarId do
                 Lean.Elab.Tactic.evalTactic stx
-            let clusters ← getGoalClusters result
+
+            let copies ← carriedSiblings clusterMap goalMap parentId
+            let copyOf : Std.HashMap MVarId StateId :=
+              copies.foldl (fun m (smv, sid) => m.insert smv sid) ∅
+            let clusters ← getGoalClusters (result ++ copies.map (·.1))
 
             -- add each new goal to map and return nodes and updated counter
             let newProofState ←
@@ -134,7 +155,8 @@ def getSubgoals
               | (nodes, tempGoalMap, c) => do
                 let goalPretty ← showGoal mvarId
                 let apiNode : APINode :=
-                  {isGoal := true, id := c, display := goalPretty}
+                  {isGoal := true, id := c, display := goalPretty,
+                   originalId := copyOf.get? mvarId}
                 let goalInfo := (mvarId, newProofState)
                 let newMap := tempGoalMap.insert c goalInfo
                 return (apiNode :: nodes, newMap, c + 1)

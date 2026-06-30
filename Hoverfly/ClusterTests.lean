@@ -128,4 +128,52 @@ run_cmd liftTermElabM do
   unless ms.isEmpty do
     throwError "sharedMVars assigned: expected [], got {ms.map (·.name)}"
 
+/-- A two-goal cluster: goal 0 (`g1`) and goal 1 (`g2`) share `?b`. Returns the
+maps `getSubgoals` would hold, sharing one saved state across both goals. -/
+private def twoGoalCluster (b g1 g2 : MVarId) : Lean.Elab.TermElabM
+    (Std.HashMap StateId ClusterInfo
+     × Std.HashMap StateId (MVarId × Lean.Elab.Term.SavedState)) := do
+  let st ← Lean.Elab.Term.saveState
+  let goalMap : Std.HashMap StateId (MVarId × Lean.Elab.Term.SavedState) :=
+    Std.HashMap.ofList [(0, (g1, st)), (1, (g2, st))]
+  let clusterMap : Std.HashMap StateId ClusterInfo :=
+    Std.HashMap.ofList [(0, ⟨[0, 1], [b]⟩), (1, ⟨[0, 1], [b]⟩)]
+  return (clusterMap, goalMap)
+
+/- `carriedSiblings`: assigning the shared mvar carries the still-open sibling. -/
+run_cmd liftTermElabM do
+  let b ← natMVar
+  let g1 ← eqGoal (mkMVar b) (mkNatLit 0)
+  let g2 ← eqGoal (mkMVar b) (mkNatLit 1)
+  let (clusterMap, goalMap) ← twoGoalCluster b g1 g2
+  b.assign (mkNatLit 5)
+  let carried ← carriedSiblings clusterMap goalMap 0
+  unless carried == [(g2, 1)] do
+    throwError "carriedSiblings carry: expected sibling g2, got \
+      {carried.map (fun (m, _) => m.name)}"
+
+/- `carriedSiblings`: nothing is carried when no shared mvar was assigned. -/
+run_cmd liftTermElabM do
+  let b ← natMVar
+  let g1 ← eqGoal (mkMVar b) (mkNatLit 0)
+  let g2 ← eqGoal (mkMVar b) (mkNatLit 1)
+  let (clusterMap, goalMap) ← twoGoalCluster b g1 g2
+  let carried ← carriedSiblings clusterMap goalMap 0
+  unless carried.isEmpty do
+    throwError "carriedSiblings no-assign: expected [], got \
+      {carried.map (fun (m, _) => m.name)}"
+
+/- `carriedSiblings`: a sibling closed as a side effect is dropped, not carried. -/
+run_cmd liftTermElabM do
+  let b ← natMVar
+  let g1 ← eqGoal (mkMVar b) (mkNatLit 0)
+  let g2 ← eqGoal (mkMVar b) (mkNatLit 1)
+  let (clusterMap, goalMap) ← twoGoalCluster b g1 g2
+  b.assign (mkNatLit 5)
+  g2.assign (mkNatLit 0)  -- mark the sibling closed (type irrelevant here)
+  let carried ← carriedSiblings clusterMap goalMap 0
+  unless carried.isEmpty do
+    throwError "carriedSiblings closed-sibling: expected [], got \
+      {carried.map (fun (m, _) => m.name)}"
+
 end Backend.ClusterTests
