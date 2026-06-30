@@ -85,9 +85,9 @@ export async function getSubgoals(
 
   // get subgoal list
   const params = { id: n.id, stateRef: stateRef, pos: pos }
-  const [subgoals, newStateRef]: [APINode[], APIData] =
+  const [clusters, newStateRef]: [APINode[][], APIData] =
     await rs.call("Backend.getSubgoals", params)
-  const tsxGoals = subgoals.map(APINodeToNode)
+  const tsxGoals = clusters.flat().map(APINodeToNode) // TODO: Don't flatten clusters
 
   return { node: { ...n, children: tsxGoals }, stateRef: newStateRef }
 }

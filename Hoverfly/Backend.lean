@@ -34,7 +34,8 @@ structure GetSubgoalsParams where
 def getGoalClusters (goals : List MVarId) : MetaM (List (List MVarId)) := do
   let mvarGoalLists ← goals.mapM (fun g => do
     let mvs ← g.getMVarDependencies
-    return (g, mvs.toList))
+    let unassigned ← mvs.toList.filterM fun m => do return !(← m.isAssigned)
+    return (g, unassigned))
   let mvarLists := mvarGoalLists.map (fun (_,x) => x)
   let f mvs clustersSoFar : List (List MVarId) :=
     let g mv acc : List (List MVarId) :=
@@ -42,14 +43,13 @@ def getGoalClusters (goals : List MVarId) : MetaM (List (List MVarId)) := do
       withMv.flatten.eraseDups :: withoutMv
     mvs.fold g clustersSoFar
   let clusters : List (List MVarId) := mvarLists.fold f mvarLists
-  let key p : Option (List MVarId) := do
-    match p with
-    | (g, mvs) =>
-      clusters.find?
-        (fun (cluster : List MVarId) =>
-          not (List.isEmpty (cluster.union mvs)))
-  let goals' := List.map (fun l => List.map (fun (x,_) => x) l) (Std.HashMap.values (mvarGoalLists.groupByKey key))
-  return goals'
+  let grouped := clusters.filterMap fun cl =>
+    let gs := (mvarGoalLists.filter fun (_, mvs) => mvs.any cl.contains).map (·.1)
+    if gs.isEmpty then none else some gs
+  let touched := grouped.flatten
+  let singles :=
+    (mvarGoalLists.filter fun (g, _) => !touched.contains g).map (fun (g, _) => [g])
+  return grouped ++ singles
 
 -- TODO there's got to be a better function for this already
 def showGoal (mvarId : MVarId) : MetaM String := do
