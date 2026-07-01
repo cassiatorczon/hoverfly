@@ -157,9 +157,12 @@
   text-align: center;
 }
 
+.disp {
+  white-space: pre-line;
+}
+
 .hf .rowA .disp {
   font-family: var(--mono);
-  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   flex: 1 1 auto;
@@ -247,7 +250,6 @@
 
 .hf .rowA.selected .disp {
   color: var(--vscode-list-activeSelectionForeground);
-  white-space: normal;
 }
 
 .hf .rowA.selected.tactic .disp {
