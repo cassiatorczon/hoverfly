@@ -211,21 +211,19 @@ structure GetApplicableTacticsParams where
 -- TODO
 def tacticListGeneral : Elab.TermElabM (List Syntax) := do
   let tacs :=  [
-    ← `(tactic | rfl),
     ← `(tactic | apply And.intro),
-
+    ← `(tactic | apply Exists.intro),
     ← `(tactic | apply Nat.le_trans), -- TODO
-
-    ← `(tactic | intros),
+    ← `(tactic | apply [Nat.sub_add_cancel]),
     ← `(tactic | assumption),
     ← `(tactic | contradiction),
-
+    ← `(tactic | intro),
+    ← `(tactic | intros),
+    ← `(tactic | rfl),
+    ← `(tactic | rw [Eq.comm]),
     ← `(tactic | simp_all),
     ← `(tactic | skip <;> skip <;> skip <;> skip <;> skip <;> skip),
-
-    ← `(tactic | subst_eqs),
-    ← `(tactic | intro),
-    ← `(tactic | rw [Eq.comm])
+    ← `(tactic | subst_eqs)
   ]
 
   return List.map Lean.TSyntax.raw tacs
@@ -233,26 +231,26 @@ def tacticListGeneral : Elab.TermElabM (List Syntax) := do
 -- TODO
 def tacticListPalamedes : Elab.TermElabM (List Syntax) := do
   let tacs := [
-      ← `(tactic | ((repeat apply duncurry); intro)),
-      ← `(tactic | apply s_pure),
-      ← `(tactic | apply s_pick),
-      ← `(tactic | apply s_arbUnit),
+      ← `(tactic | apply s_arbAtom _),
       ← `(tactic | apply s_arbBool),
       ← `(tactic | apply s_arbColor),
-      ← `(tactic | apply s_arbNat),
-      ← `(tactic | apply s_arbTy),
       ← `(tactic | apply s_arbLabel),
+      ← `(tactic | apply s_arbNat),
+      ← `(tactic | apply s_arbTuple),
+      ← `(tactic | apply s_arbTy),
+      ← `(tactic | apply s_arbUnit),
+      ← `(tactic | apply (s_between (by first | aesop | omega))),
+      ← `(tactic | apply s_between_partial),
+      ← `(tactic | apply s_gt),
+      ← `(tactic | apply s_lt_partial),
+      ← `(tactic | apply s_mod2_partial),
+      ← `(tactic | apply s_pick),
+      ← `(tactic | apply s_pure),
       ← `(tactic | assumption),
+      ← `(tactic | (goal_is_eq; apply convert (by norm_for_elements) (s_elements_partial _))),
       ← `(tactic | normalize_and_apply),
       ← `(tactic | normalize_and_apply_unfold),
-      ← `(tactic | apply s_arbAtom _),
-      ← `(tactic | apply s_gt),
-      ← `(tactic | apply s_mod2_partial),
-      ← `(tactic | apply s_lt_partial),
-      ← `(tactic | apply s_between_partial),
-      ← `(tactic | apply (s_between (by first | aesop | omega))),
-      ← `(tactic | (goal_is_eq; apply convert (by norm_for_elements) (s_elements_partial _))),
-      ← `(tactic | apply s_arbTuple),
+      ← `(tactic | ((repeat apply duncurry); intro)),
       ← `(tactic | skip)
     ]
   return List.map Lean.TSyntax.raw tacs
@@ -272,7 +270,9 @@ def getApplicableTactics
       | some (mvarId, proofState) =>
 
         -- get all tactics
-        let ts ← tacticListGeneral -- TODO
+
+        let ts ← tacticListPalamedes -- TODO
+        -- let ts ← tacticListGeneral -- TODO
 
         -- run each tactic, recording the error message if it failed and whether
         -- it left the proof state unchanged
