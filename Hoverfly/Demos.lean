@@ -3,6 +3,9 @@ import Hoverfly.Backend
 import Palamedes.Synthesizer
 open Gen.CorrectGen
 
+
+set_option linter.unusedTactic false
+
 @[simp]
 def inBounds (lo hi : Int) : Tree Int → Bool
   | .leaf => true
@@ -11,6 +14,31 @@ def inBounds (lo hi : Int) : Tree Int → Bool
 def demo_genInBounds (x y : Int): CorrectGen (fun t => inBounds x y t) := by
   hoverfly
   sorry
+
+theorem demo_small (n m x : Nat) : n + x = m → n <= m := by
+  hoverfly
+  sorry
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 def demo_genEq2 : CorrectGen (· = 2) := by
   hoverfly
@@ -41,6 +69,10 @@ theorem demo_le_trans (a b c : Nat) (hab : a ≤ b) (hbc : b ≤ c) : a ≤ c :=
 theorem demo_simple (very_very_long_variable_name : Nat) :
   very_very_long_variable_name = 1 ->
   ¬(very_very_long_variable_name = 2) /\ 1 = very_very_long_variable_name := by
+  hoverfly
+  sorry
+
+theorem demo_medium' (n m x : Nat) : n + x = m → n <= m := by
   hoverfly
   sorry
 
