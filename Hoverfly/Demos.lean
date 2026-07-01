@@ -3,6 +3,15 @@ import Hoverfly.Backend
 import Palamedes.Synthesizer
 open Gen.CorrectGen
 
+@[simp]
+def inBounds (lo hi : Int) : Tree Int → Bool
+  | .leaf => true
+  | .node l x r => lo <= x && x <= hi && inBounds lo hi l && inBounds lo hi r
+
+def demo_genInBounds (x y : Int): CorrectGen (fun t => inBounds x y t) := by
+  hoverfly
+  sorry
+
 def demo_genEq2 : CorrectGen (· = 2) := by
   hoverfly
   sorry
