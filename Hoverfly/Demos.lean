@@ -36,6 +36,7 @@ theorem demo_simple (very_very_long_variable_name : Nat) :
   sorry
 
 theorem demo_medium (n m : Nat) : n <= m → ∃ x, m = x + n := by
+  hoverfly
   sorry
 -- Proof 0:
   -- intros
