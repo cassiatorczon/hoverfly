@@ -89,19 +89,6 @@ def carriedSiblings
       | some (smv, _) =>
         if ← smv.isAssigned then return none else return some (smv, sid)
 
--- TODO there's got to be a better function for this already
-def showGoal (mvarId : MVarId) : MetaM String := do
-  let ppCtxt : PPContext := {
-    env := (← getEnv),
-    mctx := (← getMCtx),
-    lctx := (← getLCtx),
-    opts := (← getOptions),
-    currNamespace := (← getCurrNamespace),
-    openDecls := (← getOpenDecls)
-    }
-  let format ← ppGoal ppCtxt mvarId
-  return format.pretty
-
 /--
 Like `restoreState`, but *also* rewinds the name generator (and the macro-scope and
 auxiliary-declaration generators) to the values captured in `s`.
@@ -161,9 +148,9 @@ def getSubgoals
               liftM (saveState : Lean.Elab.TermElabM Lean.Elab.Term.SavedState)
             let f t mvarId := match t with
               | (nodes, tempGoalMap, c) => do
-                let goalPretty ← showGoal mvarId
+                let goalPretty ← (ppGoal mvarId)
                 let apiNode : APINode :=
-                  {isGoal := true, id := c, display := goalPretty,
+                  {isGoal := true, id := c, display := goalPretty.pretty,
                    originalId := copyOf.get? mvarId}
                 let goalInfo := (mvarId, newProofState)
                 let newMap := tempGoalMap.insert c goalInfo
