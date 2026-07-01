@@ -271,8 +271,8 @@ def getApplicableTactics
 
         -- get all tactics
 
-        -- let ts ← tacticListPalamedes -- TODO
-        let ts ← tacticListGeneral -- TODO
+        let ts ← tacticListPalamedes -- TODO
+        -- let ts ← tacticListGeneral -- TODO
 
         -- run each tactic, recording the error message if it failed and whether
         -- it left the proof state unchanged
