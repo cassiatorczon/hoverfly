@@ -3,7 +3,7 @@ import ProofWidgets
 import Palamedes.Synthesizer
 
 namespace Backend
-open Lean ProofWidgets Server
+open Lean ProofWidgets Server Lean.Meta Lean.Elab.Tactic
 
 -- TODO: Need this to make the tactics resolve correctly
 open Gen.CorrectGen
@@ -145,8 +145,8 @@ def getSubgoals
           try
             -- run tactic
             let rawResult : List Lean.MVarId <- Elab.Term.withoutErrToSorry do
-              Lean.Elab.Tactic.run mvarId do
-                Lean.Elab.Tactic.evalTactic stx
+              run mvarId do
+                evalTactic stx
             let result ← dropMVarGoals rawResult
 
             let copies ← carriedSiblings clusterMap goalMap parentId
@@ -271,8 +271,8 @@ def getApplicableTactics
 
         -- get all tactics
 
-        let ts ← tacticListPalamedes -- TODO
-        -- let ts ← tacticListGeneral -- TODO
+        -- let ts ← tacticListPalamedes -- TODO
+        let ts ← tacticListGeneral -- TODO
 
         -- run each tactic, recording the error message if it failed and whether
         -- it left the proof state unchanged
@@ -287,8 +287,8 @@ def getApplicableTactics
             liftM ((do return (← getThe Core.State).messages.toList) : Elab.TermElabM _)
           try
             let goals ← Elab.Term.withoutErrToSorry do
-              Lean.Elab.Tactic.run mvarId do
-                Lean.Elab.Tactic.evalTactic t
+              run mvarId do
+                evalTactic t
             let newMsgs ←
               liftM ((do return (← getThe Core.State).messages.toList.drop msgsBefore.length)
                 : Elab.TermElabM _)
@@ -339,10 +339,10 @@ def checkWidget : Widget.Module where
 open scoped Json in
 elab stx:"hoverfly" : tactic => do
   let rootProofState ← liftM (saveState : Lean.Elab.TermElabM _)
-  let rootMVarId ← Elab.Tactic.getMainGoal
+  let rootMVarId ← getMainGoal
 
   -- make API copy of root goal
-  let display ← Meta.ppGoal rootMVarId
+  let display ← ppGoal rootMVarId
   let rootGoal : APINode :=
           {isGoal := true, id := 0, display := display.pretty'}
 
