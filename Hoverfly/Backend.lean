@@ -37,8 +37,6 @@ structure GetSubgoalsParams where
   pos : Lsp.Position
   deriving RpcEncodable
 
-def version1 := true --todo
-
 def getGoalClusters (goals : List MVarId) : MetaM (List (List MVarId)) := do
   let mvarGoalLists ← goals.mapM (fun g => do
     let mvs ← g.getMVarDependencies
@@ -244,10 +242,6 @@ def tacticListPalamedes : Elab.TermElabM (List Syntax) := do
     ]
   return List.map Lean.TSyntax.raw tacs
 
-def tacticList := if version1 then
-    tacticListPalamedes
-  else
-    tacticListGeneral
 
 @[server_rpc_method]
 def getApplicableTactics
@@ -266,7 +260,8 @@ def getApplicableTactics
         -- get all tactics
 
 
-        let ts ← tacticList
+        let ts ← tacticListPalamedes
+        -- let ts ← tacticListGeneral
 
         -- run each tactic, recording the error message if it failed and whether
         -- it left the proof state unchanged

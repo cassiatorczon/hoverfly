@@ -23,27 +23,6 @@ theorem demo_le_trans (a b c : Nat) (hab : a ≤ b) (hbc : b ≤ c) : a ≤ c :=
   hoverfly
   sorry
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 def demo_genEq2 : CorrectGen (· = 2) := by
   hoverfly
   sorry
