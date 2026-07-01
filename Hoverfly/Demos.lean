@@ -19,6 +19,10 @@ theorem demo_small (n m x : Nat) : n + x = m → n <= m := by
   hoverfly
   sorry
 
+theorem demo_le_trans (a b c : Nat) (hab : a ≤ b) (hbc : b ≤ c) : a ≤ c := by
+  hoverfly
+  sorry
+
 
 
 
@@ -59,10 +63,6 @@ def demo_genAllTwos : CorrectGen (fun t => isAllTwos t) := by
   sorry
 
 theorem demo_mini : 1 = 1 /\ 2 = 2 := by
-  hoverfly
-  sorry
-
-theorem demo_le_trans (a b c : Nat) (hab : a ≤ b) (hbc : b ≤ c) : a ≤ c := by
   hoverfly
   sorry
 
