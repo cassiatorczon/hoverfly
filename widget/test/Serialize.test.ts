@@ -180,6 +180,44 @@ test('an off-path *partially* worked goal keeps its work, sorry at the frontier'
     assert.equal(serializeTree(root), 'T\n· intro\n  sorry\n· rfl')
   })
 
+test('backing up to a tactic drops its subgoals\' cached work to sorry', () => {
+  // We proved caseX (a clustered subgoal) then clicked back to the parent
+  // tactic T. `cacheChild` stashed caseX's proof in its cache and left T
+  // selected with no subgoal on the active path. Backing up sets that work
+  // aside, so every subgoal must serialize to `sorry`, not the cached proof.
+  const caseXCache = goal(4, 'caseX', {
+    ...sel, completed: true, children: [
+      tactic(5, 'apply s_pure', { ...sel, explored: true, completed: true })]
+  })
+  const caseX = goal(4, 'caseX', {
+    status: 'unselected', completed: true, leanOrder: 0,
+    children: [], cache: caseXCache
+  })
+  const caseY = goal(6, 'caseY', { status: 'unselected', leanOrder: 1 })
+  const root = goal(0, 'g', {
+    ...semi, children: [tactic(1, 'apply s_pick', {
+      ...sel, explored: true, children: [cluster(-10, [caseX, caseY])]
+    })]
+  })
+  assert.equal(serializeTree(root), 'apply s_pick\n· sorry\n· sorry')
+})
+
+test('backing up to a single-subgoal tactic drops cached work to sorry', () => {
+  const g1Cache = goal(2, 'g1', {
+    ...sel, completed: true, children: [
+      tactic(3, 'rfl', { ...sel, explored: true, completed: true })]
+  })
+  const g1 = goal(2, 'g1', {
+    status: 'unselected', completed: true, children: [], cache: g1Cache
+  })
+  const root = goal(0, 'g', {
+    ...semi, children: [tactic(1, 'intro', {
+      ...sel, explored: true, children: [cluster(-10, [g1])]
+    })]
+  })
+  assert.equal(serializeTree(root), 'intro\nsorry')
+})
+
 test('an abandoned tactic (replaced by another on the same goal) is ignored',
   () => {
     // At goal g we tried `wrong` (cached, even completed) then selected `right`

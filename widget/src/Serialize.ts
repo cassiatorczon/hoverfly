@@ -139,6 +139,13 @@ function serializeTactic(tactic: Node, copyMap: Map<number, Node>): string {
   const subs = realSubgoals(tactic)
   if (subs.length === 0) return line
 
+  const active = navChildren(tactic).some(
+    (c) => c.status === 'selected' || c.status === 'semiselected')
+  if (!active) {
+    if (subs.length === 1) return line + '\nsorry'
+    return [line, ...subs.map(() => focusBlock('sorry'))].join('\n')
+  }
+
   const blocks = serializeSubgoals(subs, copyMap)
   if (subs.length === 1) return line + '\n' + blocks[0]
   return [line, ...blocks].join('\n')
