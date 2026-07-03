@@ -4,6 +4,7 @@
   --tactic: var(--vscode-charts-orange);
   --done: var(--vscode-charts-green);
   --cached: var(--vscode-charts-yellow);
+  --warn: var(--vscode-editorWarning-foreground, var(--vscode-charts-orange));
   font-size: 12.5px;
 }
 
@@ -214,6 +215,17 @@
   color: var(--done);
   flex: none;
   font-size: 11px;
+}
+
+.hf .rowA .badge-orphaned {
+  color: var(--warn);
+  flex: none;
+  font-size: 12.5px;
+  line-height: 1;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--warn) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--warn) 50%, transparent);
 }
 
 .hf .rowA .badge-explored {

@@ -175,14 +175,18 @@ export function recomputeCompleted(n: Node): Node {
 
   let completed: boolean
   if (n.kind === 'cluster') {
-    // A cluster is an OR over which goal drives it: assigning the shared metavariable under one
-    // goal inactivates the siblings and carries their obligations, as copies, into that goal's
-    // subtree. The disjunction is resolved *structurally* — the driven goal stays active, the rest
-    // go inactive — so at this point there's exactly one live branch to judge (or, pre-commitment,
-    // several independent ones). Hence: all *active* members must be discharged.
-    completed = children
-      .filter((c: Node) => !isInactive(c))
-      .every((c: Node) => c.completed)
+    // A cluster's completion state is a bit complicted, because it is neither
+    // fully an AND node nor fully an OR node. Key facts include:
+    // - A cluster with exactly one goal is complete when its goal is complete.
+    // - A cluster with more than one goal is complete when one of those goals
+    //   is complete and the others are inactive. If a goal is complete but its
+    //   siblings are not inactive, then the goal was closed without instantiating
+    //   the relevant mvars and the proof cannot be completed from that point.
+    // The code below implements this logic.
+    const active = children.filter((c: Node) => !isInactive(c))
+    const resolved = children.some(isInactive)
+    completed = active.every((c: Node) => c.completed)
+      && (children.length < 2 || resolved)
   } else if (children.length === 0 && cache) {
     // A cached goal is completed if the cached tree is completed; a cached
     // tactic is _never_ completed, since caching it means we've moved away
@@ -240,6 +244,34 @@ export function recomputeVisible(n: Node): Node {
     }))
 
   return { ...n, children }
+}
+
+/* Status badge selection */
+
+export type BadgeKind =
+  | 'done'          // ✓ committed completion
+  | 'orphaned'      // ⚠ closes the goal without assigning the shared mvar
+  | 'cached-done'   // ★ a completed proof is stashed off the active path
+  | 'cached'        // ☆ progress stashed, no full proof yet
+  | 'explored'      // • visited, nothing proven
+  | 'none'          // no badge
+
+export function badgeFor(n: Node, orphaned: boolean): BadgeKind {
+  // A copied goal has no badge: any proof it holds is moot until backtracking reactivates it. The
+  // greying and `↪` redirect already mark it.
+  if (isInactive(n)) return 'none'
+
+  if (n.cache) {
+    if (!n.cache.completed) return 'cached'
+    // A goal's stashed proof is a real completion (or orphaned in a cluster); a tactic's is off the
+    // active path, so it reads as "stored, go finish".
+    if (n.kind === 'goal') return orphaned ? 'orphaned' : 'done'
+    return 'cached-done'
+  }
+
+  if (n.completed) return orphaned ? 'orphaned' : 'done'
+  if (n.explored) return 'explored'
+  return 'none'
 }
 
 /* Get tree info */

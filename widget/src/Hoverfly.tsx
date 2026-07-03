@@ -15,6 +15,8 @@ import {
 } from "vscode-languageserver-protocol";
 import {
   Node,
+  BadgeKind,
+  badgeFor,
   selectRoot,
   isInactive,
   recomputeCompleted,
@@ -117,6 +119,28 @@ function renderChildren(n: Node, onClick: (clicked: Node) => Promise<void>)
   )
 }
 
+function renderBadge(kind: BadgeKind): React.ReactNode {
+  switch (kind) {
+    case 'done':
+      return <span className="badge-done" title="Completed">✓</span>
+    case 'orphaned':
+      return <span className="badge-orphaned"
+        title={"This proof does not assign all reachable metavariables; it will "
+          + "be discarded when this goal is copied into a branch that does assign "
+          + "the metavariables."}>⚠</span>
+    case 'cached-done':
+      return <span className="badge-cached-done"
+        title="A completed proof is stored here — go back to finish">★</span>
+    case 'cached':
+      return <span className="badge-cached"
+        title="Cached — progress stored, no full proof yet">☆</span>
+    case 'explored':
+      return <span className="badge-explored" title="Already explored">•</span>
+    case 'none':
+      return null
+  }
+}
+
 const PAIR_STROKE = 'var(--vscode-textLink-foreground)'
 
 type PairLink = { from: number, to: number, key: number }
@@ -128,15 +152,13 @@ function collectPairs(n: Node, acc: PairLink[] = []): PairLink[] {
   return acc
 }
 
-function renderNode(n: Node, onClick: (clicked: Node) => Promise<void>)
+function renderNode(
+  n: Node, onClick: (clicked: Node) => Promise<void>, orphaned = false)
   : React.ReactNode {
   if (!n.visible) {
     return null
   }
 
-  // A cluster is a visual grouping of sibling goals linked by a shared
-  // metavariable. Singletons render transparently (just the goal); a real
-  // cluster (≥2 goals) gets a labelled box.
   if (n.kind === 'cluster') {
     if (n.children.length <= 1) {
       return (
@@ -145,6 +167,7 @@ function renderNode(n: Node, onClick: (clicked: Node) => Promise<void>)
         </Fragment>
       )
     }
+    const unresolved = !n.children.some(isInactive)
     return (
       <li key={n.id}>
         <div className="cluster">
@@ -152,7 +175,8 @@ function renderNode(n: Node, onClick: (clicked: Node) => Promise<void>)
             linked goals — share a metavariable
           </div>
           <ul className="failing-children">
-            {n.children.map((child: Node) => renderNode(child, onClick))}
+            {n.children.map((child: Node) =>
+              renderNode(child, onClick, unresolved /* → orphaned */))}
           </ul>
         </div>
       </li>
@@ -186,19 +210,7 @@ function renderNode(n: Node, onClick: (clicked: Node) => Promise<void>)
           ↩ #{n.originalId}
         </span>}
       <span className="id">#{n.id}</span>
-      {n.cache
-        ? (n.cache.completed
-          ? (n.kind === 'goal'
-            ? <span className="badge-done" title="Completed">✓</span>
-            : <span className="badge-cached-done"
-              title="A completed proof is stored here — go back to finish">★</span>)
-          : <span className="badge-cached"
-            title="Cached — progress stored, no full proof yet">☆</span>)
-        : n.completed && !inactive
-          ? <span className="badge-done" title="Completed">✓</span>
-          : n.explored
-            ? <span className="badge-explored" title="Already explored">•</span>
-            : null}
+      {renderBadge(badgeFor(n, orphaned))}
     </div>
   )
 

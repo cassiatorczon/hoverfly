@@ -6,6 +6,7 @@ import {
   recomputeVisible,
   recomputeInactive,
   isInactive,
+  badgeFor,
   cacheChild,
   nearestCommonAncestorWithSelected,
   navChildren,
@@ -173,6 +174,47 @@ test('recomputeInactive: an inactive original is excluded from its cluster, not 
   assert.equal(r.completed, true)
 })
 
+test('recomputeCompleted: an unresolved cluster with every member closed is NOT completed', () => {
+  // The double-solve trap: both members of a real cluster get closed independently
+  // in their own states, but NEITHER drove the shared metavariable — so no sibling
+  // was carried down and nothing is inactive. The shared mvar is still free, hence
+  // the proof is broken; the cluster must not read as completed just because every
+  // member individually did.
+  //   goal0 -split-> cluster{ m2 (closed, no assign), m3 (closed, no assign) }
+  const closed = (id: number, disp: string) => goal(id, disp, {
+    children: [tactic(id * 10, 'close', { explored: true, children: [] })]
+  })
+  const tree = goal(0, 'g', {
+    children: [tactic(1, 'split', {
+      explored: true,
+      children: [cluster(-3, [closed(2, 'a ≤ ?m'), closed(3, '?m ≤ c')])]
+    })]
+  })
+  const r = recomputeCompleted(recomputeInactive(tree))
+  // both members individually complete...
+  assert.equal(findById(r, 2)!.completed, true)
+  assert.equal(findById(r, 3)!.completed, true)
+  // ...but the cluster (and the proof) is not, since the mvar was never assigned
+  assert.equal(findById(r, -3)!.completed, false)
+  assert.equal(r.completed, false, 'unresolved cluster does not complete the proof')
+})
+
+test('recomputeCompleted: a singleton cluster completes with its lone goal', () => {
+  // A single-goal cluster shares no metavariable with siblings, so the resolution
+  // requirement does not apply: it completes as soon as its goal does.
+  const tree = goal(0, 'g', {
+    children: [tactic(1, 't', {
+      explored: true,
+      children: [cluster(-2, [goal(2, 'sub', {
+        children: [tactic(3, 'close', { explored: true, children: [] })]
+      })])]
+    })]
+  })
+  const r = recomputeCompleted(recomputeInactive(tree))
+  assert.equal(findById(r, -2)!.completed, true)
+  assert.equal(r.completed, true)
+})
+
 test('recomputeInactive: a copy stashed in a cache does not inactivate (backtrack)',
   () => {
     // Backtracking collapses the copy-bearing branch into a `cache`; the copy is
@@ -219,6 +261,64 @@ test('recomputeInactive: inactivation is derived INSIDE a cache (self-contained)
       recomputeCompleted(recomputeInactive(collapsed)).completed, true,
       'cached completed cluster proof stays completed')
   })
+
+/* badgeFor */
+
+test('badgeFor: a live completed goal is committed (done), or orphaned in a cluster', () => {
+  const done = goal(1, 'g', { completed: true, children: [tactic(2)] })
+  assert.equal(badgeFor(done, false), 'done')
+  // Same node, but it's a member of an unresolved cluster: it closed without
+  // assigning the shared mvar, so its proof will be discarded when a sibling
+  // drives — it earns the warning.
+  assert.equal(badgeFor(done, true), 'orphaned')
+})
+
+test('badgeFor: a goal\'s completed proof stashed in cache stays done / orphaned', () => {
+  // After backtracking to the parent, the solved subtree lives in `cache` with
+  // empty children — the badge must not change just because of where the proof
+  // is stored.
+  const cached = goal(1, 'g', {
+    explored: true, children: [],
+    cache: goal(1, 'g', { completed: true, children: [tactic(2)] })
+  })
+  assert.equal(badgeFor(cached, false), 'done')
+  assert.equal(badgeFor(cached, true), 'orphaned')
+})
+
+test('badgeFor: a superseded (inactive) goal advertises nothing, even when solved', () => {
+  // The double-solve fix: an inactivated original whose obligation moved to a
+  // copy must show no badge, whether its proof is live or stashed in cache.
+  const liveInactive = goal(30, '?w = ?w', {
+    redirectTo: 60, completed: true, explored: true, children: [tactic(2)]
+  })
+  const cachedInactive = goal(30, '?w = ?w', {
+    redirectTo: 60, explored: true, children: [],
+    cache: goal(30, '?w = ?w', { completed: true, children: [tactic(2)] })
+  })
+  assert.equal(isInactive(liveInactive), true)
+  assert.equal(badgeFor(liveInactive, false), 'none')
+  assert.equal(badgeFor(cachedInactive, false), 'none')
+  // the orphaned flag never overrides inactivity
+  assert.equal(badgeFor(cachedInactive, true), 'none')
+})
+
+test('badgeFor: a cached tactic reads as cached-done (complete) or cached (partial)', () => {
+  const completeTac = tactic(1, 't', {
+    explored: true, children: [],
+    cache: tactic(1, 't', { completed: true, children: [goal(2)] })
+  })
+  const partialTac = tactic(1, 't', {
+    explored: true, children: [],
+    cache: tactic(1, 't', { completed: false, children: [goal(2)] })
+  })
+  assert.equal(badgeFor(completeTac, false), 'cached-done')
+  assert.equal(badgeFor(partialTac, false), 'cached')
+})
+
+test('badgeFor: an explored-but-unproven node shows the explored dot, else nothing', () => {
+  assert.equal(badgeFor(goal(1, 'g', { explored: true }), false), 'explored')
+  assert.equal(badgeFor(goal(1, 'g', { explored: false }), false), 'none')
+})
 
 /* navChildren */
 

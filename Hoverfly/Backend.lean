@@ -207,6 +207,7 @@ def tacticListGeneral : Elab.TermElabM (List Syntax) := do
     ← `(tactic | apply And.intro),
     ← `(tactic | apply Exists.intro),
     ← `(tactic | apply Nat.le_trans), -- TODO
+    ← `(tactic | apply Nat.zero_le), -- TODO
     ← `(tactic | apply [Nat.sub_add_cancel]),
     ← `(tactic | assumption),
     ← `(tactic | contradiction),
@@ -266,8 +267,8 @@ def getApplicableTactics
         -- get all tactics
 
 
-        let ts ← tacticListPalamedes
-        -- let ts ← tacticListGeneral
+        -- let ts ← tacticListPalamedes
+        let ts ← tacticListGeneral
 
         -- run each tactic, recording the error message if it failed and whether
         -- it left the proof state unchanged
