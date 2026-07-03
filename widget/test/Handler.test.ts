@@ -249,3 +249,52 @@ test('cluster: roles flip when the other sibling drives the assignment',
     assert.equal(findById(d, 2)!.redirectTo, 9)
     assert.equal(isInactive(findById(d, 3)!), false, 'and the driver is active')
   })
+
+test('cluster: after a role-flip, closing the copy still completes the proof',
+  async () => {
+    // Regression: driving goal 2 first explores/caches its branch; after the
+    // flip, goal 2 is inactive and cached. Closing the flipped copy must
+    // complete the proof, with the inactive cached original not blocking it.
+    const s = await makeSession(transResponder)
+    await s.click(1)
+    await s.click(2)
+    await s.click(5) // drive from goal 2 (explores goal 2's subtree)
+    await s.click(2) // backtrack
+    await s.click(3) // switch to the sibling
+    await s.click(8) // drive from goal 3 -> goal 2 inactive + cached
+
+    assert.equal(display(s.get()).completed, false, 'not complete while copy open')
+
+    await s.click(9)
+    await s.click(10) // close the copy of goal 2
+
+    const d = display(s.get())
+    assert.equal(d.completed, true, 'proof completes via the flipped driver')
+    // The inactive cached original carries no truth of its own — it is excluded
+    // from its cluster, not counted as discharged — yet it must not block the
+    // proof, which completes through the active flipped driver (asserted above).
+    assert.equal(findById(d, 2)!.completed, false,
+      'the inactive original is excluded, not self-completed')
+  })
+
+test('cluster: flip back to the first driver and finish through its cache',
+  async () => {
+    const s = await makeSession(transResponder)
+    await s.click(1)
+    await s.click(2)
+    await s.click(5) // drive goal 2
+    await s.click(2) // backtrack
+    await s.click(3) // to goal 3
+    await s.click(8) // drive goal 3 -> goal 2 branch cached
+    await s.click(3) // backtrack off goal 3's tactic
+    await s.click(2) // back to goal 2: reactivates and restores its cache
+
+    assert.equal(isInactive(findById(display(s.get()), 2)!), false,
+      'goal 2 reactivated after backtracking off goal 3')
+
+    await s.click(5) // re-drive goal 2 -> goal 3 inactive again
+    await s.click(6)
+    await s.click(7)
+    assert.equal(display(s.get()).completed, true,
+      'proof completes after flipping back to the first driver')
+  })

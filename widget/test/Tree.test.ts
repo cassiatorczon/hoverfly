@@ -146,10 +146,31 @@ test('recomputeInactive: a live copy inactivates its original and redirects',
     assert.equal(isInactive(findById(r, 2)!), false)
   })
 
-test('recomputeInactive: an inactive original counts as completed', () => {
-  // its obligation has moved to the copy, so it must not block its parent
-  const r = recomputeCompleted(recomputeInactive(transTree()))
-  assert.equal(findById(r, 3)!.completed, true)
+test('recomputeInactive: an inactive original is excluded from its cluster, not blocking it', () => {
+  // The original's obligation has moved to the copy under the driver, so the
+  // original itself carries no truth here (it is NOT marked completed) but must
+  // not block its cluster: the cluster is discharged once the active driver is.
+  //   goal0 -le_trans-> cluster{ driver (w ≤ ?b), original (?b ≤ z)[inactive] }
+  //   driver -exact h5-> cluster{ copyOf3 (closed) }
+  const copy = goal(6, '5 ≤ z', {
+    originalId: 3,
+    children: [tactic(7, 'exact hz', { explored: true, children: [] })]
+  })
+  const driver = goal(2, 'w ≤ ?b', {
+    children: [tactic(5, 'exact h5', {
+      explored: true, children: [cluster(-7, [copy])]
+    })]
+  })
+  const tree = goal(0, 'w ≤ z', {
+    children: [tactic(1, 'apply le_trans', {
+      explored: true, children: [cluster(-3, [driver, goal3()])]
+    })]
+  })
+  const r = recomputeCompleted(recomputeInactive(tree))
+  // the inactive original carries no truth of its own...
+  assert.equal(findById(r, 3)!.completed, false)
+  // ...yet the whole proof completes through the active driver + its copy
+  assert.equal(r.completed, true)
 })
 
 test('recomputeInactive: a copy stashed in a cache does not inactivate (backtrack)',
@@ -158,6 +179,45 @@ test('recomputeInactive: a copy stashed in a cache does not inactivate (backtrac
     // then off the live tree, so its original reactivates — no stored state.
     const r = recomputeInactive(transTree(true))
     assert.equal(isInactive(findById(r, 3)!), false)
+  })
+
+test('recomputeInactive: inactivation is derived INSIDE a cache (self-contained)',
+  () => {
+    // A completed cluster proof (copy discharges an inactivated original) that
+    // gets collapsed into a `cache` must still read as completed: recompute
+    // descends into caches for `completed`, so it must for `inactive` too, else
+    // the cached original looks unproven and the branch wrongly reads incomplete.
+    //   S -> split -> cluster { driver, X }
+    //   driver -> assign -> cluster { copyOfX (closed) }   (X inactivated by copy)
+    const cachedSubtree = () => {
+      const copyOfX = goal(6, 'copy of X', {
+        originalId: 3,
+        children: [tactic(7, 'close', { explored: true, children: [] })]
+      })
+      const driver = goal(2, 'driver', {
+        children: [tactic(5, 'assign', {
+          explored: true, children: [cluster(-7, [copyOfX])]
+        })]
+      })
+      const originalX = goal(3, 'X') // open, no proof of its own
+      return goal(100, 'S', {
+        children: [tactic(101, 'split', {
+          explored: true, children: [cluster(-3, [driver, originalX])]
+        })]
+      })
+    }
+
+    // live: X inactivated by its copy, cluster/proof completes
+    assert.equal(
+      recomputeCompleted(recomputeInactive(cachedSubtree())).completed, true)
+
+    // collapsed into a cache: must still report completed through the cache
+    const collapsed = goal(100, 'S', {
+      children: [], explored: true, cache: cachedSubtree()
+    })
+    assert.equal(
+      recomputeCompleted(recomputeInactive(collapsed)).completed, true,
+      'cached completed cluster proof stays completed')
   })
 
 /* navChildren */

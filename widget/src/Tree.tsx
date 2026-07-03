@@ -175,13 +175,14 @@ export function recomputeCompleted(n: Node): Node {
 
   let completed: boolean
   if (n.kind === 'cluster') {
-    // A cluster's goals must all be discharged (AND), like a tactic's subgoals.
-    completed = children.every((c: Node) => c.completed)
-  } else if (n.kind === 'goal' && isInactive(n)) {
-    // An inactive goal has been superseded by a live copy under the driving
-    // tactic; that copy carries the obligation and is gated by a sibling branch,
-    // so this original counts as discharged here.
-    completed = true
+    // A cluster is an OR over which goal drives it: assigning the shared metavariable under one
+    // goal inactivates the siblings and carries their obligations, as copies, into that goal's
+    // subtree. The disjunction is resolved *structurally* — the driven goal stays active, the rest
+    // go inactive — so at this point there's exactly one live branch to judge (or, pre-commitment,
+    // several independent ones). Hence: all *active* members must be discharged.
+    completed = children
+      .filter((c: Node) => !isInactive(c))
+      .every((c: Node) => c.completed)
   } else if (children.length === 0 && cache) {
     // A cached goal is completed if the cached tree is completed; a cached
     // tactic is _never_ completed, since caching it means we've moved away
@@ -215,7 +216,8 @@ export function recomputeInactive(root: Node): Node {
   const annotate = (n: Node): Node => ({
     ...n,
     redirectTo: redirect.get(n.id),
-    children: n.children.map(annotate)
+    children: n.children.map(annotate),
+    cache: n.cache ? recomputeInactive(n.cache) : undefined
   })
   return annotate(root)
 }
