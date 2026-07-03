@@ -1,21 +1,16 @@
 import {
-  useState, useEffect, useLayoutEffect, useRef, Fragment
+  useState, useEffect, useLayoutEffect, useRef, useContext, Fragment
 } from 'react'
 import {
   useRpcSession,
   useAsync,
   mapRpcError,
-  RpcSessionAtPos,
   EditorContext,
-  PanelWidgetProps,
-  EditorConnection, DocumentPosition
+  PanelWidgetProps
 } from '@leanprover/infoview';
 import {
-  DocumentUri,
-  Position,
   Range,
   TextDocumentEdit,
-  TextDocumentIdentifier,
   TextEdit
 } from "vscode-languageserver-protocol";
 import {
@@ -26,6 +21,7 @@ import {
   recomputeVisible,
   recomputeInactive
 } from './Tree'
+import { serializeTree } from './Serialize'
 import {
   APIData,
   APINode,
@@ -218,9 +214,11 @@ function renderNode(n: Node, onClick: (clicked: Node) => Promise<void>)
 
 type DrawnLink = { d: string, head: string, color: string }
 
-function HoverflyTree({ root, onClick }: {
-  root: Node, onClick: (n: Node) =>
-    Promise<void>
+function HoverflyTree({ root, onClick, onWrite, scriptHasSorry }: {
+  root: Node,
+  onClick: (n: Node) => Promise<void>,
+  onWrite: (() => Promise<void>) | undefined,
+  scriptHasSorry: boolean
 },) {
   const treeRef = useRef<HTMLDivElement>(null)
   const [links, setLinks] = useState<DrawnLink[]>([])
@@ -284,6 +282,17 @@ function HoverflyTree({ root, onClick }: {
         <div className="banner-done">
           ✓ Proof complete — a closing tactic sequence has been found.
         </div>}
+      <div className="toolbar">
+        <button className="write-btn" disabled={!onWrite}
+          title={onWrite
+            ? "Replace `hoverfly` with the selected proof"
+            : "No source range available to write into"}
+          onClick={onWrite}>
+          {scriptHasSorry
+            ? "Write proof (with sorry)"
+            : "Write proof to file"}
+        </button>
+      </div>
       <div className="treeA" ref={treeRef}>
         <svg className="pair-arrows" width={size.w} height={size.h}>
           {links.map((l: DrawnLink, i: number) =>
@@ -303,6 +312,7 @@ function HoverflyTree({ root, onClick }: {
 type HoverflyProps = PanelWidgetProps & {
   root: APINode;
   apiData: APIData;
+  range: Range | null; // span of the literal `hoverfly` tactic
 }
 
 // TODO -- Docs for WithRpcRef say:
@@ -311,6 +321,7 @@ type HoverflyProps = PanelWidgetProps & {
 // The client must first connect to the session using $/lean/rpc/connect
 function Hoverfly(props: HoverflyProps) {
   const rs = useRpcSession()
+  const ec = useContext(EditorContext)
 
   const loaded = useAsync(
     () => getApplicableTactics(
@@ -345,7 +356,25 @@ function Hoverfly(props: HoverflyProps) {
     // `current.node` (the source of truth) above.
     const displayRoot =
       recomputeVisible(recomputeCompleted(recomputeInactive(current.node)))
-    return <><HoverflyTree root={displayRoot} onClick={onClick} /></>
+
+    // Serialize the selected sub-tree into a tactic script and replace the
+    // `hoverfly` token with it. Disabled when the elaborator gave us no range.
+    const scriptHasSorry = /\bsorry\b/.test(serializeTree(displayRoot))
+    const range = props.range
+    const onWrite = range === null ? undefined : async () => {
+      // Indent continuation lines to the column of the `hoverfly` token so the
+      // spliced-in block stays aligned inside the `by` block.
+      const newText =
+        serializeTree(displayRoot, ' '.repeat(range.start.character))
+      const edit: TextDocumentEdit = {
+        textDocument: { uri: props.pos.uri, version: null },
+        edits: [{ range, newText } as TextEdit]
+      }
+      await ec.api.applyEdit({ documentChanges: [edit] })
+    }
+
+    return <><HoverflyTree root={displayRoot} onClick={onClick}
+      onWrite={onWrite} scriptHasSorry={scriptHasSorry} /></>
   }
 }
 

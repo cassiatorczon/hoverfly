@@ -21,6 +21,7 @@ export type APINode = {
   tacticError: string | null
   noop: boolean
   originalId?: number | null
+  leanOrder?: number | null
 }
 
 export type NodeAndStateRef = { node: Node, stateRef: APIData }
@@ -34,6 +35,7 @@ export function APINodeToNode(n: APINode): Node {
       tacticError: undefined,
       noop: false,
       originalId: n.originalId ?? undefined,
+      leanOrder: n.leanOrder ?? undefined,
       completed: false,
       status: 'unselected',
       visible: true,

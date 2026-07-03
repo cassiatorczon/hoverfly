@@ -36,7 +36,6 @@ def isAllTwos : Tree Nat → Bool
   | .leaf => true
   | .node l x r => x = 2 && isAllTwos l && isAllTwos r
 
-set_option linter.unusedTactic false
 def demo_genAllTwos : CorrectGen (fun t => isAllTwos t) := by
   hoverfly
   sorry

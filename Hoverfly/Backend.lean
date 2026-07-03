@@ -29,6 +29,7 @@ structure APINode where
   tacticError : Option String := none
   noop : Bool := false
   originalId : Option StateId := none
+  leanOrder : Nat := 0
   deriving ToJson, FromJson
 
 structure GetSubgoalsParams where
@@ -139,6 +140,9 @@ def getSubgoals
             let copies ← carriedSiblings clusterMap goalMap parentId
             let copyOf : Std.HashMap MVarId StateId :=
               copies.foldl (fun m (smv, sid) => m.insert smv sid) ∅
+            let leanOrderMap : Std.HashMap MVarId Nat :=
+              (result ++ copies.map (·.1)).zipIdx.foldl
+                (fun m (mv, i) => m.insert mv i) ∅
             let clusters ← getGoalClusters (result ++ copies.map (·.1))
 
             -- add each new goal to map and return nodes and updated counter
@@ -149,7 +153,8 @@ def getSubgoals
                 let goalPretty ← (ppGoal mvarId)
                 let apiNode : APINode :=
                   {isGoal := true, id := c, display := goalPretty.pretty,
-                   originalId := copyOf.get? mvarId}
+                   originalId := copyOf.get? mvarId,
+                   leanOrder := (leanOrderMap.get? mvarId).getD 0}
                 let goalInfo := (mvarId, newProofState)
                 let newMap := tempGoalMap.insert c goalInfo
                 return (apiNode :: nodes, newMap, c + 1)
@@ -163,8 +168,9 @@ def getSubgoals
                 let info : ClusterInfo := { members, sharedMVars := ← sharedMVars mvarIds }
                 let newClusterMap := members.foldl (·.insert · info) clusterMap
                 return (gs :: gss, newMap, newClusterMap, newCount)
-            let (goals, newGoalMap, newClusterMap, newCounter) ←
+            let (goalsRev, newGoalMap, newClusterMap, newCounter) ←
               clusters.foldlM g ([], goalMap, clusterMap, nodeCounter)
+            let goals := goalsRev.reverse.map (·.reverse)
 
             -- update state
             let newState ← WithRpcRef.mk {
@@ -348,10 +354,13 @@ elab stx:"hoverfly" : tactic => do
     }
   let ref ← WithRpcRef.mk initialState
 
+  let jsonRange := toJson ((← getFileMap).lspRangeOfStx? stx)
+
   Widget.savePanelWidgetInfo checkWidget.javascriptHash
     (do
       let jsonRoot ← rpcEncode rootGoal
       let jsonApiData ← rpcEncode ref
-      pure $ json% { root: $(jsonRoot) , apiData: $(jsonApiData) }) stx
+      pure $ json% { root: $(jsonRoot) , apiData: $(jsonApiData),
+                     range: $(jsonRange) }) stx
 
 end Backend
