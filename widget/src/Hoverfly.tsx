@@ -24,6 +24,7 @@ import {
   badgeFor,
   selectRoot,
   findDescendant,
+  navChildren,
   isInactive,
   recomputeCompleted,
   recomputeVisible,
@@ -376,12 +377,10 @@ function Hoverfly(props: HoverflyProps) {
         let newNode = findDescendant(newRoot.node, n.id)
 
         if (newNode) {
-          // TODO: currently only clicks forward one child
-          // otherwise could loop forever if, say, the single child tactic was rw [Eq.comm]
-          let succeedingChildren = newNode.children.filter((c) =>
+          let succeedingChildren = navChildren(newNode).filter((c) =>
             c.kind !== 'tactic' || (!c.noop && !c.tacticError))
           if (!wasExplored && succeedingChildren.length == 1) {
-            let child = newNode.children[0]
+            let child = succeedingChildren[0]
             console.info("Auto-clicking " + child.id)
 
             setSaved(
