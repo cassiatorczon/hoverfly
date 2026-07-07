@@ -338,10 +338,12 @@ type HoverflyProps = PanelWidgetProps & {
 // file.
 // The client must first connect to the session using $/lean/rpc/connect
 function Hoverfly(props: HoverflyProps) {
+  const numAutoclicks = 10 // TODO: make this a prop with a default value
   const rs = useRpcSession()
   const ec = useContext(EditorContext)
 
   // TODO this appears to be throwing an error
+  // TODO add extra clicks here too
   const loaded = useAsync(
     () => getApplicableTactics(
       selectRoot(APINodeToNode(props.root)), props.apiData, rs, props.pos),
@@ -365,12 +367,11 @@ function Hoverfly(props: HoverflyProps) {
     const onClick = async (n: Node) => {
       console.info("Clicked node " + n.id)
 
-      let wasExplored = n.explored
+      const wasExplored = n.explored
 
-      setSaved(
-        await handleClick(current.node, current.stateRef, n, rs, props.pos))
+      const newRoot = await handleClick(current.node, current.stateRef, n, rs, props.pos)
+      setSaved(newRoot)
 
-      const newRoot = saved ?? (loaded.state === 'resolved' ? loaded.value : null)
       if (newRoot) {
         let newNode = findDescendant(newRoot.node, n.id)
 
@@ -391,6 +392,7 @@ function Hoverfly(props: HoverflyProps) {
               "been previously explored and has " + newNode.children.length +
               " total children and " + succeedingChildren.length +
               " successful children. No auto-clicking will occur.")
+            console.debug("Is explored " + newNode.explored)
           }
         } else {
           // todo error
