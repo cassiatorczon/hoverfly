@@ -199,7 +199,20 @@ structure GetApplicableTacticsParams where
   pos : Lsp.Position
   deriving RpcEncodable
 
-
+-- TODO
+open Syntax in
+private def argTactics : (List (Name → Syntax)) :=
+  let pos := (String.Pos.Raw.mk 0) -- TODO
+  let info := SourceInfo.none
+  let raw := (Substring.Raw.mk "todo raw" pos pos) -- TODO
+  [
+    fun n =>
+      node info `Elab.induction #[ident info raw n []],
+    fun n =>
+      node info `Elab.cases #[ident info raw n []],
+    fun n =>
+      node info `Elab.exists #[ident info raw n []]
+   ]
 
 -- TODO
 def tacticListGeneral : Elab.TermElabM (List Syntax) := do
@@ -270,6 +283,16 @@ def getApplicableTactics
         -- let ts ← tacticListPalamedes
         let ts ← tacticListGeneral
 
+        let mut tsArray := ts.toArray
+        for decl? in (← getLCtx).decls.toList do
+          let some decl := decl? | continue
+          if decl.isImplementationDetail then continue
+          let declName := decl.userName
+          for tac in argTactics do
+            tsArray := tsArray.push (tac declName)
+        let ts' := tsArray.toList
+
+
         -- run each tactic, recording the error message if it failed and whether
         -- it left the proof state unchanged
         let evalTac t :
@@ -295,7 +318,7 @@ def getApplicableTactics
               return (t, none, goals == [mvarId] && !assigned)
           catch e =>
             return (t, some (← e.toMessageData.toString), false)
-        let results ← ts.mapM evalTac
+        let results ← ts'.mapM evalTac
         liftM (restoreStateFull proofState : Lean.Elab.TermElabM Unit)
 
         let (succeedingResults, failingResults) :=
