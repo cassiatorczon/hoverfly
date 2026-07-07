@@ -283,6 +283,8 @@ def getApplicableTactics
         -- let ts ← tacticListPalamedes
         let ts ← tacticListGeneral
 
+
+        liftM (restoreStateFull proofState : Lean.Elab.TermElabM Unit)
         let mut tsArray := ts.toArray
         for decl? in (← getLCtx).decls.toList do
           let some decl := decl? | continue
