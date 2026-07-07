@@ -305,6 +305,18 @@ export function nearestCommonAncestorWithSelected(n: Node, id: ID):
   }
 }
 
+export function findDescendant(n: Node, id: ID): Readonly<Node> | undefined {
+  if (n.id == id) {
+    return n
+  }
+  for (const c of n.children) {
+    const found = findDescendant(c, id)
+    if (found) {
+      return found
+    }
+  }
+}
+
 /* Util */
 
 export function assert(p: boolean, e: string): void {
