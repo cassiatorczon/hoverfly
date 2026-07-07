@@ -1,5 +1,10 @@
 import {
-  useState, useEffect, useLayoutEffect, useRef, useContext, Fragment
+  useState,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useContext,
+  Fragment
 } from 'react'
 import {
   useRpcSession,
@@ -357,8 +362,19 @@ function Hoverfly(props: HoverflyProps) {
   } else {
     const onClick = async (n: Node) => {
       console.info("Clicked node " + n.id)
+
+      let wasExplored = n.explored
+
       setSaved(
         await handleClick(current.node, current.stateRef, n, rs, props.pos))
+
+      // TODO: alarmed by this
+      if (!wasExplored && n.children.length == 1) {
+        let child = n.children[0]
+        setSaved(
+          await handleClick(current.node, current.stateRef, child, rs, props.pos)
+        )
+      }
     }
 
     // `inactive`, `completed`, and `visible` are all derived from tree
