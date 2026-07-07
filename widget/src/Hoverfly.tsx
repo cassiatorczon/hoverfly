@@ -23,6 +23,7 @@ import {
   BadgeKind,
   badgeFor,
   selectRoot,
+  findDescendant,
   isInactive,
   recomputeCompleted,
   recomputeVisible,
@@ -340,6 +341,7 @@ function Hoverfly(props: HoverflyProps) {
   const rs = useRpcSession()
   const ec = useContext(EditorContext)
 
+  // TODO this appears to be throwing an error
   const loaded = useAsync(
     () => getApplicableTactics(
       selectRoot(APINodeToNode(props.root)), props.apiData, rs, props.pos),
@@ -368,13 +370,37 @@ function Hoverfly(props: HoverflyProps) {
       setSaved(
         await handleClick(current.node, current.stateRef, n, rs, props.pos))
 
-      // TODO: alarmed by this
-      if (!wasExplored && n.children.length == 1) {
-        let child = n.children[0]
-        setSaved(
-          await handleClick(current.node, current.stateRef, child, rs, props.pos)
-        )
+      const newRoot = saved ?? (loaded.state === 'resolved' ? loaded.value : null)
+      if (newRoot) {
+        let newNode = findDescendant(newRoot.node, n.id)
+
+        if (newNode) {
+          // TODO: currently only clicks forward one child
+          // otherwise could loop forever if, say, the single child tactic was rw [Eq.comm]
+          let succeedingChildren = newNode.children.filter((c) =>
+            c.kind !== 'tactic' || (!c.noop && !c.tacticError))
+          if (!wasExplored && succeedingChildren.length == 1) {
+            let child = newNode.children[0]
+            console.info("Auto-clicking " + child.id)
+
+            setSaved(
+              await handleClick(newRoot.node, newRoot.stateRef, child, rs, props.pos)
+            )
+          } else {
+            console.debug(newNode.id + " had " + (wasExplored ? "" : "not ") +
+              "been previously explored and has " + newNode.children.length +
+              " total children and " + succeedingChildren.length +
+              " successful children. No auto-clicking will occur.")
+          }
+        } else {
+          // todo error
+          console.error("No new node found with id " + n.id)
+        }
+      } else {
+        // todo error
+        console.error("No new root found after clicking " + n.id)
       }
+
     }
 
     // `inactive`, `completed`, and `visible` are all derived from tree
