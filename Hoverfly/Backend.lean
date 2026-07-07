@@ -281,7 +281,10 @@ def getApplicableTactics
 
 
         -- let ts ← tacticListPalamedes
-        let ts ← tacticListGeneral
+        -- let ts ← tacticListGeneral
+        let t0 ← `(tactic | rfl)
+        let t1 ← `(tactic | apply And.intro)
+        let ts := [t0.raw, t1.raw]
 
 
         liftM (restoreStateFull proofState : Lean.Elab.TermElabM Unit)
