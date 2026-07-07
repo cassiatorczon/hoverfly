@@ -23,7 +23,7 @@ theorem demo_le_trans (a b c : Nat) (hab : a ≤ b) (hbc : b ≤ c) : a ≤ c :=
   hoverfly
   sorry
 
-theorem demo_dumb : ∃ b, b = b ∧ b ≤ 10 := by
+theorem demo_exists : ∃ b, b = b ∧ b ≤ 10 := by
   hoverfly
   sorry
 
