@@ -28,7 +28,8 @@ import {
   isInactive,
   recomputeCompleted,
   recomputeVisible,
-  recomputeInactive
+  recomputeInactive,
+  succeedingChildren
 } from './Tree'
 import { serializeTree } from './Serialize'
 import {
@@ -344,17 +345,31 @@ function Hoverfly(props: HoverflyProps) {
   const ec = useContext(EditorContext)
 
   // TODO this appears to be throwing an error
-  // TODO add extra clicks here too
-  const loaded = useAsync(
+  // initialize state from root goal
+  const loadedInit = useAsync(
     () => getApplicableTactics(
       selectRoot(APINodeToNode(props.root)), props.apiData, rs, props.pos),
     [props.root, props.apiData, rs, props.pos])
 
+  let loaded = loadedInit;
+  if (loadedInit.state === 'resolved') {
+    let sChildren = succeedingChildren(loadedInit.value.node)
+    if (sChildren.length == 1) {
+      // TODO
+      // loaded = await handleClick(loadedInit.value.node, loadedInit.value.stateRef,
+      //   sChildren[0], rs, props.pos)
+    }
+  }
+
+
+  // current tree state: a root node and a ref to backend state
   const [saved, setSaved] = useState<NodeAndStateRef | null>(null)
 
   // Drop cached state on re-elaboration
   useEffect(() => { setSaved(null) }, [props.apiData, props.pos, rs])
 
+  // if there is a saved state, use that
+  // otherwise use initialized state if resolved
   const current = saved ?? (loaded.state === 'resolved' ? loaded.value : null)
 
   if (current === null) {
@@ -377,10 +392,9 @@ function Hoverfly(props: HoverflyProps) {
         let newNode = findDescendant(newRoot.node, n.id)
 
         if (newNode) {
-          let succeedingChildren = navChildren(newNode).filter((c) =>
-            c.kind !== 'tactic' || (!c.noop && !c.tacticError))
-          if (!wasExplored && succeedingChildren.length == 1) {
-            let child = succeedingChildren[0]
+          let sChildren = succeedingChildren(newNode)
+          if (!wasExplored && sChildren.length == 1) {
+            let child = sChildren[0]
             console.info("Auto-clicking " + child.id)
 
             setSaved(

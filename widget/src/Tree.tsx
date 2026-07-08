@@ -317,6 +317,11 @@ export function findDescendant(n: Node, id: ID): Readonly<Node> | undefined {
   }
 }
 
+export function succeedingChildren(n: Node): Readonly<Node>[] {
+  return navChildren(n).filter((c) =>
+    c.kind !== 'tactic' || (!c.noop && !c.tacticError))
+}
+
 /* Util */
 
 export function assert(p: boolean, e: string): void {
