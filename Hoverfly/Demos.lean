@@ -100,7 +100,27 @@ theorem add_assoc (n m p : Nat) :
     n + (m + p) = (n + m) + p := by
   hoverfly
   sorry
-  -- sorry
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   -- induction p with
   -- | zero =>
   --   rewrite [Nat.add_zero]
