@@ -73,13 +73,24 @@ function serializeGoal(goal: Node, copyMap: Map<number, Node>): string {
   return 'sorry'
 }
 
-// The proof of a subgoal, resolving a copied (inactive) goal to its copy.
+// Prepend the goal's `rename_i` line: the backend gave accessible names to the
+// hypotheses the parent tactic introduced inaccessibly, and the script must replay that
+// rename before any tactic can reference them. A bare `sorry` references nothing, so it
+// stays bare.
+function withRenames(goal: Node, block: string): string {
+  if (!goal.renames?.length || block === 'sorry') return block
+  return `rename_i ${goal.renames.join(' ')}\n` + block
+}
+
+// The proof of a subgoal, resolving a copied (inactive) goal to its copy. The `rename_i`
+// prefix comes from the *positional* node either way: the runtime state at this point in
+// the script is the one whose inaccessible hypotheses `sub`'s creation renamed.
 function serializeSubgoal(sub: Node, copyMap: Map<number, Node>): string {
   if (isInactive(sub)) {
     const copy = copyMap.get(sub.id)
-    return copy ? serializeGoal(copy, copyMap) : 'sorry'
+    return copy ? withRenames(sub, serializeGoal(copy, copyMap)) : 'sorry'
   }
-  return serializeGoal(sub, copyMap)
+  return withRenames(sub, serializeGoal(sub, copyMap))
 }
 
 // Order subgoals so every copied goal is emitted *after* the sibling whose
@@ -154,7 +165,7 @@ function serializeTactic(tactic: Node, copyMap: Map<number, Node>): string {
 // Serialize the selected sub-tree rooted at `root` (a goal) into a tactic script. Incomplete
 // branches become `sorry`.
 export function serializeTree(root: Node, baseIndent = ''): string {
-  const block = serializeGoal(root, buildCopyMap(root))
+  const block = withRenames(root, serializeGoal(root, buildCopyMap(root)))
   if (baseIndent === '') return block
   return block.split('\n')
     .map((l, i) => i === 0 ? l : baseIndent + l)

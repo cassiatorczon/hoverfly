@@ -30,6 +30,9 @@ structure APINode where
   noop : Bool := false
   originalId : Option StateId := none
   leanOrder : Nat := 0
+  /-- For a goal node: accessible names given to its inaccessible hypotheses (in context
+  order). The serialized script replays them as a leading `rename_i` line. -/
+  renames : List String := []
   deriving ToJson, FromJson
 
 structure GetSubgoalsParams where
@@ -109,6 +112,41 @@ def restoreStateFull (s : Lean.Elab.Term.SavedState) : Lean.Elab.TermElabM Unit 
     nextMacroScope := s.meta.core.nextMacroScope
     auxDeclNGen    := s.meta.core.auxDeclNGen }
 
+/-- The hypotheses of `lctx` that `rename_i` would rename, in context order: those whose
+`userName` is inaccessible (macro-scoped) or shadowed by a later hypothesis of the same
+name. Mirrors the backwards walk in `Lean.Elab.Tactic.renameInaccessibles` (with
+scope-free caller binders, its `equalScope` test reduces to `hasMacroScopes`). -/
+private def renameableDecls (lctx : LocalContext) : Array LocalDecl := Id.run do
+  let mut renameable := #[]
+  let mut found : NameSet := {}
+  for decl? in lctx.decls.toList.reverse do
+    let some decl := decl? | continue
+    if decl.isImplementationDetail then continue
+    if decl.userName.hasMacroScopes || found.contains decl.userName then
+      renameable := renameable.push decl
+    found := found.insert decl.userName
+  return renameable.reverse
+
+/-- Give every inaccessible (or shadowed) hypothesis of `g` a fresh accessible name
+derived from its base name, so that tactic arguments and serialized scripts can refer to
+it. The rename is applied by `Lean.Elab.Tactic.renameInaccessibles` — the function behind
+`rename_i`/`case`/`next` — with one binder per renameable hypothesis, so a serialized
+`rename_i <names>` line reproduces the stored state exactly. Returns the renamed goal and
+the chosen names in context order (= `rename_i` binder order). -/
+def normalizeInaccessibles (g : MVarId) : Elab.TermElabM (MVarId × List Name) := do
+  let lctx := (← g.getDecl).lctx
+  let renameable := renameableDecls lctx
+  if renameable.isEmpty then return (g, [])
+  let mut lctx' := lctx
+  let mut names := #[]
+  for decl in renameable do
+    let fresh := lctx'.getUnusedName decl.userName
+    lctx' := lctx'.setUserName decl.fvarId fresh
+    names := names.push fresh
+  let bs ← names.mapM fun n => `(binderIdent| $(mkIdent n):ident)
+  let g' ← renameInaccessibles g bs
+  return (g', names.toList)
+
 @[server_rpc_method]
 def getSubgoals
   (_params : GetSubgoalsParams)
@@ -137,6 +175,14 @@ def getSubgoals
                 evalTactic stx
             let result ← dropMVarGoals rawResult
 
+            -- normalize away inaccessible hypotheses so tactic arguments and serialized
+            -- scripts can name them (the script replays this via `rename_i`)
+            let renamed ← result.mapM fun g =>
+              liftM (normalizeInaccessibles g : Elab.TermElabM _)
+            let result := renamed.map (·.1)
+            let renamesOf : Std.HashMap MVarId (List Name) :=
+              renamed.foldl (fun m (g, ns) => m.insert g ns) ∅
+
             let copies ← carriedSiblings clusterMap goalMap parentId
             let copyOf : Std.HashMap MVarId StateId :=
               copies.foldl (fun m (smv, sid) => m.insert smv sid) ∅
@@ -154,7 +200,8 @@ def getSubgoals
                 let apiNode : APINode :=
                   {isGoal := true, id := c, display := goalPretty.pretty,
                    originalId := copyOf.get? mvarId,
-                   leanOrder := (leanOrderMap.get? mvarId).getD 0}
+                   leanOrder := (leanOrderMap.get? mvarId).getD 0,
+                   renames := ((renamesOf.get? mvarId).getD []).map (·.toString)}
                 let goalInfo := (mvarId, newProofState)
                 let newMap := tempGoalMap.insert c goalInfo
                 return (apiNode :: nodes, newMap, c + 1)
@@ -214,25 +261,36 @@ structure GetApplicableTacticsParams where
   deriving RpcEncodable
 
 
--- TODO
-def nameToString (n : Name) : String :=
-  n.toString
-  -- match n with
-  -- | .str _ s => s
-  -- | .num p i => p.toString
-  -- | _ => "?"
+/-- Erase macro scopes from every ident in `stx`.
+
+Every ident a `` `(tactic| ...) `` quotation produces carries macro scopes, even global
+constants: `apply Nat.le_trans` holds `Nat.le_trans._@.Hoverfly.Backend._hyg.4`.
+`Syntax.prettyPrint` hides this because it is `reprint`, which echoes each ident's raw
+source substring — but the real pretty printer prints the name, and its `sanitizeSyntax`
+pass daggers *anything* macro-scoped, giving `apply Nat.le_trans✝`.
+
+Hypothesis references are unaffected: stored goal states are normalized
+(`normalizeInaccessibles`), so tactics name locals by plain accessible names that carry
+no macro scopes to begin with. -/
+private partial def eraseIdentScopes : Syntax → Syntax
+  | stx@(.ident ..)   => mkIdentFrom stx stx.getId.eraseMacroScopes
+  | .node info k args => .node info k (args.map eraseIdentScopes)
+  | stx               => stx
+
+/-- Pretty-print a tactic `Syntax` for display. Because goal states are normalized, the
+displayed text is exactly the runnable tactic. -/
+def ppTacticDisplay (stx : Syntax) : CoreM String :=
+  return (← PrettyPrinter.ppCategory `tactic (eraseIdentScopes stx)).pretty
 
 -- TODO
 open Syntax in
-private def argTactics : List (Name → CoreM (Syntax × String)) :=
+private def argTactics : List (Name → CoreM Syntax) :=
   [
-    fun x => do return ((← `(tactic| induction $(mkIdent x):ident)).raw, "induction " ++ nameToString x),
-    fun x => do return ((← `(tactic| cases $(mkIdent x):ident)).raw, "cases " ++ nameToString x),
-    fun x => do
-      return ((← `(tactic| exists $(mkIdent x):term)).raw, "exists " ++ nameToString x),
+    fun x => do return (← `(tactic| induction $(mkIdent x):ident)).raw,
+    fun x => do return (← `(tactic| cases $(mkIdent x):ident)).raw,
+    fun x => do return (← `(tactic| exists $(mkIdent x):term)).raw,
     -- fun x => do return (← `(tactic| rw [$(mkIdent x):ident])).raw
-    fun x => do
-      return ((← `(tactic| rewrite [$(mkIdent x):ident])).raw, "rewrite  [" ++ nameToString x ++ "]")
+    fun x => do return (← `(tactic| rewrite [$(mkIdent x):ident])).raw
   ]
 
 
@@ -307,23 +365,22 @@ def getApplicableTactics
         -- let ts ← tacticListPalamedes
         let ts ← tacticListGeneral
 
-        let ts := ts.map (fun t => (t, t.prettyPrint.pretty))
-
         liftM (restoreStateFull proofState : Lean.Elab.TermElabM Unit)
-        let mut tsArray := ts.toArray
         let lctx := (← liftM (mvarId.getDecl : Elab.TermElabM _)).lctx
-        -- let lctx ← liftM (Lean.LocalContext.sanitizeNames lctx : Elab.TermElabM LocalContext)
         let allDecls := lctx.decls.toList
+
+        let mut tsArray ←
+          ts.toArray.mapM fun t =>
+            return (t, ← liftM (ppTacticDisplay t : Elab.TermElabM _))
         for tac in argTactics do
           for decl? in allDecls do
             let some decl := decl? | continue
             if decl.isImplementationDetail then continue
             if decl.isAuxDecl then continue -- TODO?
-            let declName := decl.userName
-            -- if declName.isInternal || declName.isInternalDetail || declName.isAnonymous
-              -- || declName.isInaccessibleUserName
-              --  then continue
-            let (t, display) ← liftM (tac declName : Elab.TermElabM (Syntax × String))
+            -- every stored goal state is normalized (`normalizeInaccessibles`), so
+            -- `decl.userName` is accessible, unshadowed, and safe to name in a script
+            let t ← liftM (tac decl.userName : Elab.TermElabM Syntax)
+            let display ← liftM (ppTacticDisplay t : Elab.TermElabM _)
             tsArray := tsArray.push (t, display)
         let ts' := tsArray.toList
 
@@ -399,13 +456,23 @@ def checkWidget : Widget.Module where
 
 open scoped Json in
 elab stx:"hoverfly" : tactic => do
-  let rootProofState ← liftM (saveState : Lean.Elab.TermElabM _)
+  let preState ← liftM (saveState : Lean.Elab.TermElabM _)
   let rootMVarId ← getMainGoal
+
+  -- Normalize the root's inaccessible hypotheses on a scratch branch: the widget's
+  -- saved state sees the renamed goal, while the real proof state is restored untouched
+  -- below. The script starts with the matching `rename_i` line and Write replaces the
+  -- `hoverfly` token with the script, so the two stay in sync.
+  let (rootMVarId, rootRenames) ←
+    liftM (normalizeInaccessibles rootMVarId : Lean.Elab.TermElabM _)
+  let rootProofState ← liftM (saveState : Lean.Elab.TermElabM _)
 
   -- make API copy of root goal
   let display ← ppGoal rootMVarId
+  liftM (restoreState preState : Lean.Elab.TermElabM Unit)
   let rootGoal : APINode :=
-          {isGoal := true, id := 0, display := display.pretty'}
+          {isGoal := true, id := 0, display := display.pretty',
+           renames := rootRenames.map (·.toString)}
 
   -- initialize map of goal ids to MVarIds and States
   let initialGoalMap := Std.HashMap.ofList [

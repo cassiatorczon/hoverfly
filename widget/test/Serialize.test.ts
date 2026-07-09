@@ -333,3 +333,53 @@ test('linked cluster with a trailing independent goal keeps on_goal indices',
       'on_goal 1 =>\n' +
       '  d1')
   })
+
+/* rename_i prefixes for goals whose inaccessible hypotheses the backend renamed */
+
+test('a worked goal with renames gets a leading rename_i', () => {
+  const root = goal(0, 'g', {
+    ...semi, children: [tactic(1, 'cases p', {
+      ...semi, explored: true, children: [cluster(-2, [goal(2, 'g1', {
+        ...sel, renames: ['fst', 'snd'],
+        children: [tactic(3, 'cases fst', { ...sel, explored: true })]
+      })])]
+    })]
+  })
+  assert.equal(serializeTree(root), 'cases p\nrename_i fst snd\ncases fst')
+})
+
+test('an unworked goal with renames stays a bare sorry', () => {
+  const root = goal(0, 'g', {
+    ...semi, children: [tactic(1, 'cases p', {
+      ...sel, explored: true, children: [cluster(-2, [
+        goal(2, 'g1', { ...sel, renames: ['fst', 'snd'] })])]
+    })]
+  })
+  assert.equal(serializeTree(root), 'cases p\nsorry')
+})
+
+test('root renames come first in the script', () => {
+  const root = goal(0, 'g', {
+    ...sel, renames: ['h'],
+    children: [tactic(1, 'cases h', { ...sel, explored: true })]
+  })
+  assert.equal(serializeTree(root), 'rename_i h\ncases h')
+})
+
+test('renames inside a bullet are indented with the block', () => {
+  const root = goal(0, 'g', {
+    ...semi, children: [tactic(1, 'cases p', {
+      ...semi, explored: true, children: [cluster(-10, [
+        goal(2, 'g1', {
+          ...sel, leanOrder: 0, renames: ['n'],
+          children: [tactic(3, 'cases n', { ...sel, explored: true })]
+        }),
+        goal(4, 'g2', {
+          ...semi, leanOrder: 1,
+          children: [tactic(5, 'rfl', { ...semi, explored: true })]
+        })
+      ])]
+    })]
+  })
+  assert.equal(serializeTree(root), 'cases p\n· rename_i n\n  cases n\n· rfl')
+})

@@ -13,6 +13,7 @@ type MutableNode = {
   noop: boolean, // for tactics: succeeded but left the proof state unchanged
   originalId: ID | undefined, // the ID of the node this has been copied from, if applicable
   leanOrder?: number, // for goals: position in Lean's goal order under the parent tactic
+  renames?: string[], // for goals: accessible names the backend gave this goal's inaccessible hypotheses; serialized as a leading `rename_i`
   completed: boolean, // a completed goal or tactic with all completed subgoals
   children: Node[], // applicable tactics for a goal, clusters for a tactic, goals for a cluster
   status: Status, // display information

@@ -22,6 +22,7 @@ export type APINode = {
   noop: boolean
   originalId?: number | null
   leanOrder?: number | null
+  renames?: string[] | null
 }
 
 export type NodeAndStateRef = { node: Node, stateRef: APIData }
@@ -36,6 +37,7 @@ export function APINodeToNode(n: APINode): Node {
       noop: false,
       originalId: n.originalId ?? undefined,
       leanOrder: n.leanOrder ?? undefined,
+      renames: n.renames ?? undefined,
       completed: false,
       status: 'unselected',
       visible: true,
