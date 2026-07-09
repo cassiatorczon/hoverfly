@@ -65,7 +65,7 @@ theorem demo_exists' (x y : Nat) : x + x = y → ∃ z, y = 2 * z := by
   subst_eqs
   lia
 
-theorem demo_medium (n m : Nat) : n <= m → ∃ x, m = x + n := by
+theorem demo_medium (n m : Nat) : n <= m → ∃ x, m = x + n:= by
   hoverfly
   sorry
 -- Proof 0:
@@ -80,7 +80,6 @@ theorem demo_medium (n m : Nat) : n <= m → ∃ x, m = x + n := by
   --  apply Nat.exists_eq_add_of_le'
   --  assumption
 -- Proof 2:
-  -- revert m
   -- induction n
   -- case zero =>
   --   intro m h
@@ -96,3 +95,19 @@ theorem demo_medium (n m : Nat) : n <= m → ∃ x, m = x + n := by
   --     exists x
   --     rw [←Nat.add_assoc, Nat.add_one_inj]
   --     assumption
+
+theorem add_assoc (n m p : Nat) :
+    n + (m + p) = (n + m) + p := by
+  hoverfly
+  sorry
+  -- sorry
+  -- induction p with
+  -- | zero =>
+  --   rewrite [Nat.add_zero]
+  --   rewrite [Nat.add_zero]
+  --   rfl
+  -- | succ p' ih =>
+  --   rewrite [Nat.add_succ]
+  --   rewrite [Nat.add_succ]
+  --   rewrite [Nat.add_succ, ih]
+  --   rfl

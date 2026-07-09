@@ -213,14 +213,28 @@ structure GetApplicableTacticsParams where
   pos : Lsp.Position
   deriving RpcEncodable
 
+
+-- TODO
+def nameToString (n : Name) : String :=
+  n.toString
+  -- match n with
+  -- | .str _ s => s
+  -- | .num p i => p.toString
+  -- | _ => "?"
+
 -- TODO
 open Syntax in
-private def argTactics : List (Name → CoreM Syntax) :=
+private def argTactics : List (Name → CoreM (Syntax × String)) :=
   [
-    fun n => do return (← `(tactic| induction $(mkIdent n):ident)).raw,
-    fun n => do return (← `(tactic| cases $(mkIdent n):ident)).raw,
-    fun n => do return (← `(tactic| exists $(mkIdent n):term)).raw
+    fun x => do return ((← `(tactic| induction $(mkIdent x):ident)).raw, "induction " ++ nameToString x),
+    fun x => do return ((← `(tactic| cases $(mkIdent x):ident)).raw, "cases " ++ nameToString x),
+    fun x => do
+      return ((← `(tactic| exists $(mkIdent x):term)).raw, "exists " ++ nameToString x),
+    -- fun x => do return (← `(tactic| rw [$(mkIdent x):ident])).raw
+    fun x => do
+      return ((← `(tactic| rewrite [$(mkIdent x):ident])).raw, "rewrite  [" ++ nameToString x ++ "]")
   ]
+
 
 -- TODO
 def tacticListGeneral : Elab.TermElabM (List Syntax) := do
@@ -233,11 +247,14 @@ def tacticListGeneral : Elab.TermElabM (List Syntax) := do
     ← `(tactic | assumption),
     ← `(tactic | contradiction),
     ← `(tactic | intro),
-    ← `(tactic | intros),
+    -- ← `(tactic | intros),
     ← `(tactic | rfl),
-    ← `(tactic | rw [Eq.comm]),
-    ← `(tactic | simp_all),
-    ← `(tactic | skip <;> skip <;> skip <;> skip <;> skip <;> skip),
+    ← `(tactic | rewrite [Eq.comm]),
+    ← `(tactic | rewrite [Nat.add_zero]),
+    ← `(tactic | rewrite [Nat.add_succ]),
+    -- ← `(tactic | rw [Nat.add_assoc]),
+    -- ← `(tactic | simp_all),
+    -- ← `(tactic | skip <;> skip <;> skip <;> skip <;> skip <;> skip),
     ← `(tactic | subst_eqs)
   ]
 
@@ -270,7 +287,6 @@ def tacticListPalamedes : Elab.TermElabM (List Syntax) := do
     ]
   return List.map Lean.TSyntax.raw tacs
 
-
 @[server_rpc_method]
 def getApplicableTactics
   (_params : GetApplicableTacticsParams)
@@ -291,17 +307,24 @@ def getApplicableTactics
         -- let ts ← tacticListPalamedes
         let ts ← tacticListGeneral
 
+        let ts := ts.map (fun t => (t, t.prettyPrint.pretty))
 
         liftM (restoreStateFull proofState : Lean.Elab.TermElabM Unit)
         let mut tsArray := ts.toArray
         let lctx := (← liftM (mvarId.getDecl : Elab.TermElabM _)).lctx
+        -- let lctx ← liftM (Lean.LocalContext.sanitizeNames lctx : Elab.TermElabM LocalContext)
         let allDecls := lctx.decls.toList
-        for decl? in allDecls do
-          let some decl := decl? | continue
-          if decl.isImplementationDetail then continue
-          let declName := decl.userName
-          for tac in argTactics do
-            tsArray := tsArray.push (← liftM (tac declName : Elab.TermElabM Syntax))
+        for tac in argTactics do
+          for decl? in allDecls do
+            let some decl := decl? | continue
+            if decl.isImplementationDetail then continue
+            if decl.isAuxDecl then continue -- TODO?
+            let declName := decl.userName
+            -- if declName.isInternal || declName.isInternalDetail || declName.isAnonymous
+              -- || declName.isInaccessibleUserName
+              --  then continue
+            let (t, display) ← liftM (tac declName : Elab.TermElabM (Syntax × String))
+            tsArray := tsArray.push (t, display)
         let ts' := tsArray.toList
 
 
@@ -330,20 +353,18 @@ def getApplicableTactics
               return (t, none, goals == [mvarId] && !assigned)
           catch e =>
             return (t, some (← e.toMessageData.toString), false)
-        let results ← ts'.mapM evalTac
+        let results ← ts'.mapM (fun (t, display) => return (← evalTac t, display))
         liftM (restoreStateFull proofState : Lean.Elab.TermElabM Unit)
 
         let (succeedingResults, failingResults) :=
-          results.partition (·.2.1.isNone)
+          results.partition (·.1.2.1.isNone)
 
         -- add each new tactic to map and return nodes and updated counter
         let f acc res := match acc, res with
-          | (nodes, tempTacticMap, c), (stx, tacErr, noop) =>
+          | (nodes, tempTacticMap, c), ((stx, tacErr, noop), display) =>
             let apiNode : APINode :=
               {isGoal := false, id := c,
-                -- display := s!"ts: {ts.length}, tsArray: {tsArray.size}, ts': {ts'.length}, "
-                --   ++ s!"allDecls: {allDecls.length}", -- TODO
-                display := stx.prettyPrint.pretty,
+                display := display,
                 tacticError := tacErr, noop := noop}
             let tacticInfo := (stx, _params.id)
             let newMap := tempTacticMap.insert c tacticInfo
