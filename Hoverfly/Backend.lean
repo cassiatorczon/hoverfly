@@ -452,7 +452,7 @@ def getApplicableTactics
 
 @[widget_module]
 def checkWidget : Widget.Module where
-  javascript := include_str ".."/".lake"/"build"/"js"/"Hoverfly.js"
+  javascript := include_str ".."/"src"/"assets"/"js"/"Hoverfly.js"
 
 open scoped Json in
 elab stx:"hoverfly" : tactic => do
