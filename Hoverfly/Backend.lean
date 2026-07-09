@@ -215,18 +215,12 @@ structure GetApplicableTacticsParams where
 
 -- TODO
 open Syntax in
-private def argTactics : (List (Name → Syntax)) :=
-  let pos := (String.Pos.Raw.mk 0) -- TODO
-  let info := SourceInfo.none
-  let raw := (Substring.Raw.mk "todo raw" pos pos) -- TODO
+private def argTactics : List (Name → CoreM Syntax) :=
   [
-    fun n =>
-      node info `Elab.induction #[ident info raw n []],
-    fun n =>
-      node info `Elab.cases #[ident info raw n []],
-    fun n =>
-      node info `Elab.exists #[ident info raw n []]
-   ]
+    fun n => do return (← `(tactic| induction $(mkIdent n):ident)).raw,
+    fun n => do return (← `(tactic| cases $(mkIdent n):ident)).raw,
+    fun n => do return (← `(tactic| exists $(mkIdent n):term)).raw
+  ]
 
 -- TODO
 def tacticListGeneral : Elab.TermElabM (List Syntax) := do
@@ -300,14 +294,14 @@ def getApplicableTactics
 
         liftM (restoreStateFull proofState : Lean.Elab.TermElabM Unit)
         let mut tsArray := ts.toArray
-        let foo := ← getLocalHyps
-        let allDecls := (← getLCtx).decls.toList
+        let lctx := (← liftM (mvarId.getDecl : Elab.TermElabM _)).lctx
+        let allDecls := lctx.decls.toList
         for decl? in allDecls do
           let some decl := decl? | continue
           if decl.isImplementationDetail then continue
           let declName := decl.userName
           for tac in argTactics do
-            tsArray := tsArray.push (tac declName)
+            tsArray := tsArray.push (← liftM (tac declName : Elab.TermElabM Syntax))
         let ts' := tsArray.toList
 
 
@@ -347,9 +341,9 @@ def getApplicableTactics
           | (nodes, tempTacticMap, c), (stx, tacErr, noop) =>
             let apiNode : APINode :=
               {isGoal := false, id := c,
-                display := s!"ts: {ts.length}, tsArray: {tsArray.size}, ts': {ts'.length}, "
-                  ++ s!"allDecls: {allDecls.length}, localHyps: {foo.size}", -- TODO
-                -- display := stx.prettyPrint.pretty,
+                -- display := s!"ts: {ts.length}, tsArray: {tsArray.size}, ts': {ts'.length}, "
+                --   ++ s!"allDecls: {allDecls.length}", -- TODO
+                display := stx.prettyPrint.pretty,
                 tacticError := tacErr, noop := noop}
             let tacticInfo := (stx, _params.id)
             let newMap := tempTacticMap.insert c tacticInfo
