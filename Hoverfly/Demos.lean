@@ -16,6 +16,7 @@ def demo_genInBounds (x y : Int): CorrectGen (fun t => inBounds x y t) := by
   sorry
 
 theorem demo_small (n m x : Nat) : n + x = m → n <= m := by
+  intro h
   hoverfly
   sorry
 
@@ -48,7 +49,7 @@ theorem demo_mini : 1 = 1 /\ 2 = 2 := by
   hoverfly
   sorry
 
-theorem demo_simple (very_very_long_variable_name : Nat) :
+theorem demo_long_names (very_very_long_variable_name : Nat) :
   very_very_long_variable_name = 1 ->
   ¬(very_very_long_variable_name = 2) /\ 1 = very_very_long_variable_name := by
   hoverfly
@@ -57,6 +58,12 @@ theorem demo_simple (very_very_long_variable_name : Nat) :
 theorem demo_medium' (n m x : Nat) : n + x = m → n <= m := by
   hoverfly
   sorry
+
+theorem demo_exists' (x y : Nat) : x + x = y → ∃ z, y = 2 * z := by
+  intro
+  exists x
+  subst_eqs
+  lia
 
 theorem demo_medium (n m : Nat) : n <= m → ∃ x, m = x + n := by
   hoverfly

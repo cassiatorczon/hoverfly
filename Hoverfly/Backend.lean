@@ -9,7 +9,7 @@ open Lean ProofWidgets Server Lean.Meta Lean.Elab.Tactic
 open Gen.CorrectGen
 
 def StateId := Nat
-  deriving OfNat, BEq, Hashable, ToJson, FromJson, HAdd
+  deriving OfNat, BEq, Hashable, ToJson, FromJson, HAdd, ToString
 
 structure ClusterInfo where
   members : List StateId
@@ -190,8 +190,22 @@ def getSubgoals
                 {← e.toMessageData.toString}"
             }
             pure ([[errNode]], _params.stateRef)
-        | _ => pure ([], _params.stateRef) -- TODO: error behavior
-      | _ => pure ([], _params.stateRef) -- TODO: error behavior
+        | _ =>
+          let errNode : APINode := {
+              isGoal := true, id := nodeCounter,
+              display := s!"Unable to find proof state for goal " ++
+                s!"'{parentId}'."
+            }
+          -- TODO: error behavior
+          pure ([[errNode]], _params.stateRef)
+      | _ =>
+        let errNode : APINode := {
+            isGoal := true, id := nodeCounter,
+            display := s!"Unable to find parent goal of tactic " ++
+                s!"{_params.id}."
+          }
+        -- TODO: error behavior
+        pure ([[errNode]], _params.stateRef)
 
 structure GetApplicableTacticsParams where
   id : StateId
@@ -281,15 +295,14 @@ def getApplicableTactics
 
 
         -- let ts ← tacticListPalamedes
-        -- let ts ← tacticListGeneral
-        let t0 ← `(tactic | rfl)
-        let t1 ← `(tactic | apply And.intro)
-        let ts := [t0.raw, t1.raw]
+        let ts ← tacticListGeneral
 
 
         liftM (restoreStateFull proofState : Lean.Elab.TermElabM Unit)
         let mut tsArray := ts.toArray
-        for decl? in (← getLCtx).decls.toList do
+        let foo := ← getLocalHyps
+        let allDecls := (← getLCtx).decls.toList
+        for decl? in allDecls do
           let some decl := decl? | continue
           if decl.isImplementationDetail then continue
           let declName := decl.userName
@@ -333,7 +346,10 @@ def getApplicableTactics
         let f acc res := match acc, res with
           | (nodes, tempTacticMap, c), (stx, tacErr, noop) =>
             let apiNode : APINode :=
-              {isGoal := false, id := c, display := stx.prettyPrint.pretty,
+              {isGoal := false, id := c,
+                display := s!"ts: {ts.length}, tsArray: {tsArray.size}, ts': {ts'.length}, "
+                  ++ s!"allDecls: {allDecls.length}, localHyps: {foo.size}", -- TODO
+                -- display := stx.prettyPrint.pretty,
                 tacticError := tacErr, noop := noop}
             let tacticInfo := (stx, _params.id)
             let newMap := tempTacticMap.insert c tacticInfo
@@ -353,7 +369,13 @@ def getApplicableTactics
           }
 
         pure (tacticsAll, newState)
-      | _ => pure ([], _params.stateRef) -- TODO: error behavior
+      | _ =>
+        let errNode : APINode := {
+            isGoal := true, id := nodeCounter,
+            display := s!"Unable to find state for goal " ++
+                s!"{_params.id}."
+          }
+        pure ([errNode], _params.stateRef) -- TODO: error behavior
 
 
 @[widget_module]
