@@ -42,11 +42,16 @@ target widget pkg : Unit := do
   rollupConfig.mapM fun _ => do
     let traceFile := pkg.buildDir / "js" / "lake.trace"
     buildUnlessUpToDate traceFile (← getTrace) traceFile do
-      proc {
-        cmd := "npm"
-        args := #["run", "build"]
-        cwd := some (pkg.dir / "widget")
-      }
+      if ← (pkg.dir / "widget" / "node_modules").pathExists then
+        proc {
+          cmd := "npm"
+          args := #["run", "build"]
+          cwd := some (pkg.dir / "widget")
+        }
+      else
+        logInfo s!"Hoverfly: widget/node_modules not found; \
+          using prebuilt JS in src/assets/js. \
+          Run `npm install` in the widget/ directory to rebuild it from source."
 
 lean_lib Hoverfly where
   needs := #[widget]
