@@ -1,7 +1,6 @@
 import Hoverfly.Backend
 
 import Palamedes.Synthesizer
-open Gen.CorrectGen
 
 
 set_option linter.unusedTactic false
@@ -15,25 +14,8 @@ set_option linter.unreachableTactic false
 add_hoverfly_tactics [assumption, contradiction, intro, rfl, subst_eqs,
   rewrite [Eq.comm], rewrite [Nat.add_zero], rewrite [Nat.add_succ],
   apply Exists.intro, apply Nat.le_trans, apply Nat.zero_le, apply Nat.sub_add_cancel]
-  -- `(tactic | apply And.intro),
-  --   ← `(tactic | apply Exists.intro),
-  --   ← `(tactic | apply Nat.le_trans), -- TODO
-  --   ← `(tactic | apply Nat.zero_le), -- TODO
-  --   ← `(tactic | apply [Nat.sub_add_cancel]),
-  --   ← `(tactic | assumption),
-  --   ← `(tactic | contradiction),
-  --   ← `(tactic | intro),
-  --   -- ← `(tactic | intros),
-  --   ← `(tactic | rfl),
-  --   ← `(tactic | rewrite [Eq.comm]),
-  --   ← `(tactic | rewrite [Nat.add_zero]),
-  --   ← `(tactic | rewrite [Nat.add_succ]),
-  --   -- ← `(tactic | rw [Nat.add_assoc]),
-  --   -- ← `(tactic | simp_all),
-  --   -- ← `(tactic | skip <;> skip <;> skip <;> skip <;> skip <;> skip),
-  --   ← `(tactic | subst_eqs)
-  -- ]
 
+open Gen.CorrectGen in
 def demo_genInBounds (x y : Int): CorrectGen (fun t => inBounds x y t) := by
   hoverfly
   sorry
