@@ -1,13 +1,9 @@
 import ProofWidgets
 
 import Hoverfly.Attribute
-import Palamedes.Synthesizer
 
 namespace Backend
 open Lean ProofWidgets Server Lean.Meta Lean.Elab.Tactic
-
--- TODO: Need this to make the tactics resolve correctly
-open Gen.CorrectGen
 
 def StateId := Nat
   deriving OfNat, BEq, Hashable, ToJson, FromJson, HAdd, ToString
@@ -46,12 +42,12 @@ def getGoalClusters (goals : List MVarId) : MetaM (List (List MVarId)) := do
     let unassigned ← mvs.toList.filterM fun m => do return !(← m.isAssigned)
     return (g, unassigned))
   let mvarLists := mvarGoalLists.map (fun (_,x) => x)
-  let f mvs clustersSoFar : List (List MVarId) :=
-    let g mv acc : List (List MVarId) :=
+  let f clustersSoFar mvs : List (List MVarId) :=
+    let g acc mv : List (List MVarId) :=
       let (withMv, withoutMv) := acc.partition (fun l => l.contains mv)
       withMv.flatten.eraseDups :: withoutMv
-    mvs.fold g clustersSoFar
-  let clusters : List (List MVarId) := mvarLists.fold f mvarLists
+    List.foldl g clustersSoFar mvs
+  let clusters : List (List MVarId) := List.foldl f mvarLists mvarLists
   let grouped := clusters.filterMap fun cl =>
     let gs := (mvarGoalLists.filter fun (_, mvs) => mvs.any cl.contains).map (·.1)
     if gs.isEmpty then none else some gs

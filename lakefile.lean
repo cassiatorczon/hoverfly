@@ -4,11 +4,8 @@ open Lake DSL System
 package "hoverfly" where
   version := v!"0.1.0"
 
-require aesop from git
-  "https://github.com/leanprover-community/aesop" @ "v4.31.0"
-
-require Palamedes from git
-  "https://github.com/hgoldstein95/palamedes-lean" @ "v4.31.0"
+require ProofWidgets4 from git
+  "https://github.com/leanprover-community/ProofWidgets4" @ "main"
 
 /-
 The following config is inspired by https://github.com/leanprover-community/ProofWidgets4/blob/main/lakefile.lean.
