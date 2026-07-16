@@ -5,7 +5,7 @@ package "hoverfly" where
   version := v!"0.1.0"
 
 require ProofWidgets4 from git
-  "https://github.com/leanprover-community/ProofWidgets4" @ "main"
+  "https://github.com/leanprover-community/ProofWidgets4" @ "v0.0.105"
 
 /-
 The following config is inspired by https://github.com/leanprover-community/ProofWidgets4/blob/main/lakefile.lean.
