@@ -1,5 +1,6 @@
 import ProofWidgets
 
+import Hoverfly.Attribute
 import Palamedes.Synthesizer
 
 namespace Backend
@@ -16,6 +17,7 @@ structure ClusterInfo where
   sharedMVars : List MVarId
 
 structure State where
+  allTactics : List (TSyntax `tactic)
   nodeCounter : StateId := 0
   goalMap : Std.HashMap StateId (MVarId × Elab.Term.SavedState) := ∅
   tacticMap : Std.HashMap StateId (Syntax × StateId) := ∅
@@ -116,7 +118,7 @@ def getSubgoals
   RequestM.withWaitFindSnapAtPos _params.pos fun snap => do
     RequestM.runTermElabM snap do
       -- get counter and maps
-      let {nodeCounter, goalMap, tacticMap, clusterMap}
+      let {allTactics, nodeCounter, goalMap, tacticMap, clusterMap}
         := _params.stateRef.val
 
       -- get syntax and id of parent goal for tactic
@@ -174,7 +176,8 @@ def getSubgoals
 
             -- update state
             let newState ← WithRpcRef.mk {
-                nodeCounter := newCounter
+                allTactics := allTactics,
+                nodeCounter := newCounter,
                 goalMap := newGoalMap,
                 tacticMap := tacticMap,
                 clusterMap := newClusterMap
@@ -294,20 +297,13 @@ def getApplicableTactics
   RequestM.withWaitFindSnapAtPos _params.pos fun snap => do
     RequestM.runTermElabM snap do
       -- get counter and maps
-      let {nodeCounter, goalMap, tacticMap, clusterMap}
+      let {allTactics, nodeCounter, goalMap, tacticMap, clusterMap}
         := _params.stateRef.val
 
       -- get mvarId and proof state for goal (TODO: necessary?)
       match goalMap.get? _params.id with
       | some (mvarId, proofState) =>
-
-        -- get all tactics
-
-
-        -- let ts ← tacticListPalamedes
-        let ts ← tacticListGeneral
-
-        let ts := ts.map (fun t => (t, t.prettyPrint.pretty))
+        let ts := allTactics.map (fun t => (t, t.raw.prettyPrint.pretty))
 
         liftM (restoreStateFull proofState : Lean.Elab.TermElabM Unit)
         let mut tsArray := ts.toArray
@@ -324,7 +320,7 @@ def getApplicableTactics
               -- || declName.isInaccessibleUserName
               --  then continue
             let (t, display) ← liftM (tac declName : Elab.TermElabM (Syntax × String))
-            tsArray := tsArray.push (t, display)
+            tsArray := tsArray.push ({raw:=t}, display)
         let ts' := tsArray.toList
 
 
@@ -377,6 +373,7 @@ def getApplicableTactics
 
         -- update state (cluster membership is unchanged by tactic expansion)
         let newState ← WithRpcRef.mk {
+            allTactics := allTactics
             nodeCounter := newCounterAll
             goalMap := goalMap,
             tacticMap := newTacticMapAll,
@@ -399,6 +396,10 @@ def checkWidget : Widget.Module where
 
 open scoped Json in
 elab stx:"hoverfly" : tactic => do
+  let lemmaApps ← (hoverflyLemmas (← getEnv)).mapM fun n =>
+    `(tactic| apply $(mkIdent (`_root_ ++ n)):term)
+  let tacs := (hoverflyTactics (← getEnv)).toList
+
   let rootProofState ← liftM (saveState : Lean.Elab.TermElabM _)
   let rootMVarId ← getMainGoal
 
@@ -414,6 +415,7 @@ elab stx:"hoverfly" : tactic => do
 
   -- initialize state
   let initialState : State := {
+      allTactics := tacs ++ lemmaApps.toList -- TODO, we need the rest
       nodeCounter := rootGoal.id + 1,
       goalMap := initialGoalMap,
       tacticMap := ∅
