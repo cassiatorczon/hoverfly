@@ -2,12 +2,13 @@ import type { RpcSessionAtPos, DocumentPosition } from '@leanprover/infoview';
 import {
   Node,
   assert,
-  nearestCommonAncestorWithSelected,
-  navChildren,
   cacheChild,
-  updateNodes,
+  changeStatusAtId,
   changeStatusAtSelected,
-  changeStatusAtId
+  getNavParent,
+  navChildren,
+  nearestCommonAncestorWithSelected,
+  updateNodes
 } from './Tree'
 
 export type APIData = {
@@ -128,9 +129,22 @@ export async function handleClick(
   pos: DocumentPosition): Promise<NodeAndStateRef> {
 
   if (clicked.status === 'selected') {
-    // User has clicked the already-selected node. Do nothing.
-    console.info("Node " + clicked.id + " was already selected.")
-    return { node: root, stateRef }
+    // User has clicked the already-selected node.
+
+    // if the node was the root, do nothing
+    if (clicked.id === root.id) {
+      console.info("Node " + clicked.id + " was already selected.")
+      return { node: root, stateRef }
+    } else {
+      // "unselect" a node on double click, i.e. select its parent
+      const parentCand = getNavParent(root, clicked.id)
+      if (parentCand) {
+        return handleClick(root, stateRef, parentCand, rs, pos)
+      } else {
+        //TODO error: this could mean we somehow didn't find clicked.id in the tree, or we clicked a cluster node somehow
+        return { node: root, stateRef }
+      }
+    }
   } else {
     console.debug("Clicked unselected node: " + clicked.id + ".")
   }

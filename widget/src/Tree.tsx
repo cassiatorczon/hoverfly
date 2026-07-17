@@ -305,6 +305,24 @@ export function nearestCommonAncestorWithSelected(n: Node, id: ID):
   }
 }
 
+// returns the parent node of a given node, ignoring all cluster nodes
+// returns undefined if id matches root, a cluster node, or no nodes
+export function getNavParent(node: Node, childId: ID): Readonly<Node> | undefined {
+  const children = navChildren(node)
+  if (children.find((c: Node) => c.id === childId)) {
+    return node
+  }
+
+  for (const c of children) {
+    const parentCand = getNavParent(c, childId)
+    if (parentCand) {
+      return parentCand
+    }
+  }
+
+  return undefined
+}
+
 export function findDescendant(n: Node, id: ID): Readonly<Node> | undefined {
   if (n.id == id) {
     return n
