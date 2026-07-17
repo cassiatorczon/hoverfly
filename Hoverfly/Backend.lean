@@ -374,5 +374,7 @@ elab stx:"hoverfly" : tactic => do
       let jsonApiData ← rpcEncode ref
       pure $ json% { root: $(jsonRoot) , apiData: $(jsonApiData),
                      range: $(jsonRange) }) stx
+  let sorryTac ← `(tactic | sorry)
+  evalTactic (TSyntax.raw sorryTac)
 
 end Backend
