@@ -1,6 +1,7 @@
 module
 
 public meta import Lean.Elab.Command
+import Batteries.Linter.UnreachableTactic
 
 public meta section
 
@@ -54,6 +55,8 @@ elab (name := addTacs)
     "add_hoverfly_tactics " e:tac_list : command => do
   let tacArray ← liftTermElabM (TacList.elab e)
   tacArray.forM (fun tac => modifyEnv fun env => hoverflyTacticExt.addEntry env tac)
+
+initialize Batteries.Linter.UnreachableTactic.addIgnoreTacticKind ``addTacs
 
 /-
 -- -- Below is modified from Aesop :

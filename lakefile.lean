@@ -7,6 +7,8 @@ package "hoverfly" where
 require ProofWidgets4 from git
   "https://github.com/leanprover-community/ProofWidgets4" @ "v0.0.105"
 
+require "leanprover-community" / "batteries" @ git "v4.32.0"
+
 /-
 The following config is inspired by https://github.com/leanprover-community/ProofWidgets4/blob/main/lakefile.lean.
 -/
