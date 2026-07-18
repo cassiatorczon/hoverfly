@@ -16,3 +16,6 @@ add_hoverfly_tactics
     apply Nat.sub_add_cancel,
     rewrite [Nat.two_mul]
   ]
+
+theorem demo_le_trans (a b c : Nat) (hab : a ≤ b) (hbc : b ≤ c) : a ≤ c := by
+  hoverfly
