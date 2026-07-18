@@ -208,7 +208,7 @@
 .hf .rowA .badge-cached {
   color: var(--cached);
   flex: none;
-  font-size: 11px;
+  font-size: 15px;
 }
 
 .hf .rowA .badge-cached-done {

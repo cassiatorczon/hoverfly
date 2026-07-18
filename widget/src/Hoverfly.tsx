@@ -141,7 +141,7 @@ function renderBadge(kind: BadgeKind): React.ReactNode {
         title="A completed proof is stored here — go back to finish">★</span>
     case 'cached':
       return <span className="badge-cached"
-        title="Cached — progress stored, no full proof yet">☆</span>
+        title="Cached — progress stored, no full proof yet">◕</span>
     case 'explored':
       return <span className="badge-explored" title="Already explored">•</span> // todo: maybe we should highlight or sth instead
     case 'none':
