@@ -135,7 +135,7 @@ function renderBadge(kind: BadgeKind): React.ReactNode {
       return <span className="badge-orphaned"
         title={"This proof does not assign all reachable metavariables; it will "
           + "be discarded when this goal is copied into a branch that does assign "
-          + "the metavariables."}>⚠</span>
+          + "the metavariables."}>⚠</span> // TODO: clearer error message
     case 'cached-done':
       return <span className="badge-cached-done"
         title="A completed proof is stored here — go back to finish">★</span>
@@ -143,7 +143,7 @@ function renderBadge(kind: BadgeKind): React.ReactNode {
       return <span className="badge-cached"
         title="Cached — progress stored, no full proof yet">☆</span>
     case 'explored':
-      return <span className="badge-explored" title="Already explored">•</span>
+      return <span className="badge-explored" title="Already explored">•</span> // todo: maybe we should highlight or sth instead
     case 'none':
       return null
   }
