@@ -302,17 +302,6 @@ function HoverflyTree({ root, onClick, onWrite, scriptHasSorry }: {
         <div className="banner-done">
           ✓ Proof complete — a closing tactic sequence has been found.
         </div>}
-      <div className="toolbar">
-        <button className="write-btn" disabled={!onWrite}
-          title={onWrite
-            ? "Replace `hoverfly` with the selected proof"
-            : "No source range available to write into"}
-          onClick={onWrite}>
-          {scriptHasSorry
-            ? "Write proof (with sorry)"
-            : "Write proof to file"}
-        </button>
-      </div>
       <div className="treeA" ref={treeRef}>
         <svg className="pair-arrows" width={size.w} height={size.h}>
           {links.map((l: DrawnLink, i: number) =>
@@ -324,6 +313,18 @@ function HoverflyTree({ root, onClick, onWrite, scriptHasSorry }: {
         <ul>
           {renderNode(root, onClick)}
         </ul>
+      </div>
+      <div className="toolbar">
+        <button className={scriptHasSorry ? "write-btn incomplete" : "write-btn"}
+          disabled={!onWrite}
+          title={onWrite
+            ? "Replace `hoverfly` with the selected proof"
+            : "No source range available to write into"}
+          onClick={onWrite}>
+          {scriptHasSorry
+            ? "Finalize Incomplete Proof"
+            : "Finalize Proof"}
+        </button>
       </div>
     </div>
   )
