@@ -191,7 +191,7 @@ function renderNode(
     )
   }
 
-  const marker = n.kind === 'goal' ? '⊢' : '▸'
+  const marker = n.kind === 'goal' ? '⏹' : '⋅'
   const failed = n.kind === 'tactic' && n.tacticError !== undefined
   const successClass = n.kind === 'tactic'
     ? (n.tacticError === undefined ? 'succeeds' : 'fails') : ''
