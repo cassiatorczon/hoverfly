@@ -254,18 +254,6 @@
   opacity: .6;
 }
 
-.hf .rowA .id {
-  color: var(--vscode-disabledForeground);
-  font-size: 10px;
-  flex: none;
-  opacity: 0;
-  transition: opacity .12s;
-}
-
-.hf .rowA:hover .id {
-  opacity: 1;
-}
-
 .hf .rowA .marker {
   color: var(--vscode-disabledForeground);
 }

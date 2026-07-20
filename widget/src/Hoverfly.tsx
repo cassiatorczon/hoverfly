@@ -242,7 +242,6 @@ function renderNode(n: Node, ctx: RenderCtx, orphaned = false)
         <RedirectStub dir="in" target={n.originalId} ctx={ctx}
           title={"Copied from #" + n.originalId + ", the goal superseded when "
             + "the tactic that fixed the shared metavariable was applied."} />}
-      <span className="id">#{n.id}</span>
       {renderBadge(badgeFor(n, orphaned))}
     </div>
   )
