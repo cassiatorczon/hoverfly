@@ -61,20 +61,6 @@
   position: relative;
 }
 
-.hf .pair-arrows {
-  position: absolute;
-  top: 0;
-  left: 0;
-  z-index: 0;
-  overflow: visible;
-  pointer-events: none;
-}
-
-.hf .treeA>ul {
-  position: relative;
-  z-index: 1;
-}
-
 .hf .treeA ul {
   list-style: none;
   margin: 0;
@@ -85,7 +71,13 @@
   position: relative;
 }
 
-.hf .treeA .failing-children {
+.hf .treeA .kids.flush {
+  margin-left: 0;
+  padding-left: 0;
+  border-left: none;
+}
+
+.hf .treeA .kids.nested {
   margin-left: 9px;
   padding-left: 11px;
   border-left: 1px solid var(--vscode-panel-border);
@@ -123,6 +115,11 @@
   border-radius: 6px 0 0 6px;
 }
 
+.hf .cluster>.kids.nested {
+  border-left: none;
+  padding-left: 6px;
+}
+
 .hf .cluster-label {
   padding: 1px 6px;
   font-size: 10px;
@@ -148,7 +145,21 @@
 .hf .rowA .redirect {
   flex: none;
   font-size: 10px;
-  color: var(--vscode-textLink-foreground);
+  cursor: pointer;
+  white-space: nowrap;
+  padding: 0 4px;
+  border-radius: 3px;
+  color: var(--goal);
+  background: color-mix(in srgb, var(--goal) 12%, transparent);
+}
+
+.hf .rowA .redirect:hover {
+  background: color-mix(in srgb, var(--goal) 25%, transparent);
+}
+
+.hf .rowA.linked {
+  outline: 1px dashed var(--goal);
+  outline-offset: -1px;
 }
 
 .hf .err-wrap {
@@ -213,10 +224,7 @@
   font-size: 12.5px;
   font-weight: 700;
   line-height: 1;
-  padding: 1px 5px;
-  border-radius: 4px;
-  background: color-mix(in srgb, var(--done) 16%, transparent);
-  border: 1px solid color-mix(in srgb, var(--done) 50%, transparent);
+  padding: 1px 2px;
 }
 
 .hf .rowA .badge-cached {
@@ -236,10 +244,7 @@
   flex: none;
   font-size: 12.5px;
   line-height: 1;
-  padding: 1px 5px;
-  border-radius: 4px;
-  background: color-mix(in srgb, var(--warn) 16%, transparent);
-  border: 1px solid color-mix(in srgb, var(--warn) 50%, transparent);
+  padding: 1px 2px;
 }
 
 .hf .rowA .badge-explored {
@@ -261,47 +266,38 @@
   opacity: 1;
 }
 
-.hf .rowA.goal .marker {
-  color: var(--goal);
+.hf .rowA .marker {
+  color: var(--vscode-disabledForeground);
 }
 
-.hf .rowA.tactic .marker {
+.hf .rowA.frontier .marker {
   color: var(--tactic);
 }
 
-.hf .rowA.tactic .disp {
-  color: var(--vscode-textLink-foreground);
+.hf .rowA.chosen .marker {
+  color: var(--goal);
 }
 
-.hf .rowA.unselected .disp {
-  color: var(--vscode-descriptionForeground);
+.hf .rowA.settled .marker {
+  color: var(--done);
 }
 
-.hf .rowA.tactic.unselected.fails .disp {
-  color: var(--vscode-descriptionForeground);
+.hf .rowA.frontier .disp {
+  color: var(--vscode-editor-foreground);
 }
 
-.hf .rowA.tactic.unselected.succeeds .disp {
-  color: var(--vscode-textLink-foreground);
+.hf .rowA.chosen .disp,
+.hf .rowA.settled .disp,
+.hf .rowA.tactic.fails .disp,
+.hf .rowA.tactic.noop .disp {
+  color: var(--vscode-disabledForeground);
 }
 
 .hf .rowA.semiselected {
   border-left-color: color-mix(in srgb, var(--goal) 55%, transparent);
 }
 
-.hf .rowA.semiselected .disp {
-  color: var(--vscode-editor-foreground);
-}
-
 .hf .rowA.selected {
-  background: var(--vscode-list-activeSelectionBackground);
+  background: color-mix(in srgb, var(--goal) 14%, transparent);
   border-left-color: var(--goal);
-}
-
-.hf .rowA.selected .disp {
-  color: var(--vscode-list-activeSelectionForeground);
-}
-
-.hf .rowA.selected.tactic .disp {
-  color: var(--vscode-list-activeSelectionForeground);
 }

@@ -1,7 +1,6 @@
 import {
   useState,
   useEffect,
-  useLayoutEffect,
   useRef,
   useContext,
   Fragment
@@ -24,8 +23,8 @@ import {
   badgeFor,
   selectRoot,
   findDescendant,
-  navChildren,
   isInactive,
+  isFrontier,
   recomputeCompleted,
   recomputeVisible,
   recomputeInactive,
@@ -73,14 +72,13 @@ function HoverError({ message, children }: {
   )
 }
 
-function renderChildren(n: Node, onClick: (clicked: Node) => Promise<void>)
-  : React.ReactNode {
+function renderChildren(n: Node, ctx: RenderCtx): React.ReactNode {
   if (n.children.length === 0) return null
 
   if (n.kind !== 'goal') {
     return (
-      <ul className="failing-children">
-        {n.children.map((child: Node) => renderNode(child, onClick))}
+      <ul className="kids flush">
+        {n.children.map((child: Node) => renderNode(child, ctx))}
       </ul>
     )
   }
@@ -97,8 +95,8 @@ function renderChildren(n: Node, onClick: (clicked: Node) => Promise<void>)
     n.children.filter((c: Node) => isFailingTactic(c) && c.visible)
 
   return (
-    <ul className="failing-children">
-      {mainChildren.map((child: Node) => renderNode(child, onClick))}
+    <ul className="kids flush">
+      {mainChildren.map((child: Node) => renderNode(child, ctx))}
       {noopChildren.length > 0 &&
         <li>
           <details className="failing-group">
@@ -106,8 +104,8 @@ function renderChildren(n: Node, onClick: (clicked: Node) => Promise<void>)
               {noopChildren.length} no-op{' '}
               {noopChildren.length === 1 ? 'tactic' : 'tactics'}
             </summary>
-            <ul className="failing-children">
-              {noopChildren.map((child: Node) => renderNode(child, onClick))}
+            <ul className="kids nested">
+              {noopChildren.map((child: Node) => renderNode(child, ctx))}
             </ul>
           </details>
         </li>}
@@ -118,8 +116,8 @@ function renderChildren(n: Node, onClick: (clicked: Node) => Promise<void>)
               {failingChildren.length} failing{' '}
               {failingChildren.length === 1 ? 'tactic' : 'tactics'}
             </summary>
-            <ul className="failing-children">
-              {failingChildren.map((child: Node) => renderNode(child, onClick))}
+            <ul className="kids nested">
+              {failingChildren.map((child: Node) => renderNode(child, ctx))}
             </ul>
           </details>
         </li>}
@@ -149,19 +147,34 @@ function renderBadge(kind: BadgeKind): React.ReactNode {
   }
 }
 
-const PAIR_STROKE = 'var(--vscode-textLink-foreground)'
-
-type PairLink = { from: number, to: number, key: number }
-function collectPairs(n: Node, acc: PairLink[] = []): PairLink[] {
-  if (n.redirectTo !== undefined) {
-    acc.push({ from: n.id, to: n.redirectTo, key: n.id })
-  }
-  n.children.forEach((c: Node) => collectPairs(c, acc))
-  return acc
+type RenderCtx = {
+  onClick: (clicked: Node) => Promise<void>,
+  linkedId: number | undefined,
+  setLinkedId: (id: number | undefined) => void
 }
 
-function renderNode(
-  n: Node, onClick: (clicked: Node) => Promise<void>, orphaned = false)
+function scrollToNode(from: Element, id: number): void {
+  const target = from.closest('.hf')?.querySelector(`[data-node-id="${id}"]`)
+  target?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+}
+
+function RedirectStub({ dir, target, title, ctx }: {
+  dir: 'out' | 'in', target: number, title: string, ctx: RenderCtx
+}) {
+  return (
+    <span className="redirect" title={title}
+      onMouseEnter={() => ctx.setLinkedId(target)}
+      onMouseLeave={() => ctx.setLinkedId(undefined)}
+      onClick={(e) => {
+        e.stopPropagation()
+        scrollToNode(e.currentTarget, target)
+      }}>
+      {dir === 'out' ? `↗ moved to #${target}` : `↘ copy of #${target}`}
+    </span>
+  )
+}
+
+function renderNode(n: Node, ctx: RenderCtx, orphaned = false)
   : React.ReactNode {
   if (!n.visible) {
     return null
@@ -171,20 +184,21 @@ function renderNode(
     if (n.children.length <= 1) {
       return (
         <Fragment key={n.id}>
-          {n.children.map((child: Node) => renderNode(child, onClick))}
+          {n.children.map((child: Node) => renderNode(child, ctx))}
         </Fragment>
       )
     }
     const unresolved = !n.children.some(isInactive)
+    const shared = n.display
     return (
       <li key={n.id}>
         <div className="cluster">
           <div className="cluster-label">
-            linked goals — share a metavariable
+            entangled goals; they must agree on {shared}
           </div>
-          <ul className="failing-children">
+          <ul className="kids nested">
             {n.children.map((child: Node) =>
-              renderNode(child, onClick, unresolved /* → orphaned */))}
+              renderNode(child, ctx, unresolved /* → orphaned */))}
           </ul>
         </div>
       </li>
@@ -194,29 +208,40 @@ function renderNode(
   const marker = n.kind === 'goal' ? '⏹' : '⋅'
   const failed = n.kind === 'tactic' && n.tacticError !== undefined
   const successClass = n.kind === 'tactic'
-    ? (n.tacticError === undefined ? 'succeeds' : 'fails') : ''
+    ? (failed ? 'fails' : n.noop ? 'noop' : 'succeeds') : ''
   const inactive = isInactive(n)
   const clickable = !failed && !inactive
+  const onPath = n.status === 'selected' || n.status === 'semiselected'
+
+  const frontier = n.kind === 'goal'
+    ? isFrontier(n)
+    : !failed && !n.noop && !onPath
+  const stateClass =
+    n.completed ? 'settled'
+      : frontier ? 'frontier'
+        : onPath ? 'chosen'
+          : ''
 
   const row = (
-    <div className={`rowA ${n.kind} ${n.status} ${successClass}`
-      + (inactive ? ' inactive' : '')}
+    <div className={`rowA ${n.kind} ${n.status} ${successClass} ${stateClass}`
+      + (inactive ? ' inactive' : '')
+      + (ctx.linkedId === n.id ? ' linked' : '')}
       data-node-id={n.id}
-      onClick={clickable ? () => onClick(n) : undefined}>
-      <span className="marker">{marker}</span>
+      onClick={clickable ? () => ctx.onClick(n) : undefined}>
+      <span className="marker"
+        title={stateClass === 'frontier' && n.kind === 'goal'
+          ? "Still open — this goal needs a proof" : undefined}>
+        {marker}
+      </span>
       <span className="disp">{n.display}</span>
       {n.redirectTo !== undefined &&
-        <span className="redirect"
+        <RedirectStub dir="out" target={n.redirectTo} ctx={ctx}
           title={"This goal continues as #" + n.redirectTo + ", carried under "
-            + "the tactic that fixed the shared metavariable."}>
-          ↪ #{n.redirectTo}
-        </span>}
+            + "the tactic that fixed the shared metavariable."} />}
       {n.kind === 'goal' && n.originalId !== undefined &&
-        <span className="redirect"
+        <RedirectStub dir="in" target={n.originalId} ctx={ctx}
           title={"Copied from #" + n.originalId + ", the goal superseded when "
-            + "the tactic that fixed the shared metavariable was applied."}>
-          ↩ #{n.originalId}
-        </span>}
+            + "the tactic that fixed the shared metavariable was applied."} />}
       <span className="id">#{n.id}</span>
       {renderBadge(badgeFor(n, orphaned))}
     </div>
@@ -227,12 +252,10 @@ function renderNode(
       {failed && n.tacticError
         ? <HoverError message={n.tacticError}>{row}</HoverError>
         : row}
-      {renderChildren(n, onClick)}
+      {renderChildren(n, ctx)}
     </li>
   )
 }
-
-type DrawnLink = { d: string, head: string, color: string }
 
 function HoverflyTree({ root, onClick, onWrite, scriptHasSorry }: {
   root: Node,
@@ -240,60 +263,7 @@ function HoverflyTree({ root, onClick, onWrite, scriptHasSorry }: {
   onWrite: (() => Promise<void>) | undefined,
   scriptHasSorry: boolean
 },) {
-  const treeRef = useRef<HTMLDivElement>(null)
-  const [links, setLinks] = useState<DrawnLink[]>([])
-  const [size, setSize] = useState<{ w: number, h: number }>({ w: 0, h: 0 })
-
-  // Layout effect to render arrows connecting copied goals
-  useLayoutEffect(() => {
-    const container = treeRef.current
-    if (!container) return
-
-    const compute = () => {
-      const cRect = container.getBoundingClientRect()
-      const rel = (el: Element) => {
-        const r = el.getBoundingClientRect()
-        return {
-          left: r.left - cRect.left + container.scrollLeft,
-          top: r.top - cRect.top + container.scrollTop,
-          height: r.height
-        }
-      }
-
-      const drawn: DrawnLink[] = []
-      collectPairs(root).forEach((p: PairLink, i: number) => {
-        const a = container.querySelector(`[data-node-id="${p.from}"]`)
-        const b = container.querySelector(`[data-node-id="${p.to}"]`)
-        if (!a || !b) return
-        const ra = rel(a), rb = rel(b)
-        const startX = ra.left, startY = ra.top + ra.height / 2
-        const endX = rb.left, endY = rb.top + rb.height / 2
-        // Each pair gets its own channel so multiple connectors don't overlap.
-        const channelX = Math.max(2, Math.min(ra.left, rb.left) - 10 - i * 6)
-        drawn.push({
-          d: `M ${startX} ${startY} H ${channelX} V ${endY} H ${endX}`,
-          head: `M ${endX} ${endY} L ${endX - 6} ${endY - 3} `
-            + `L ${endX - 6} ${endY + 3} Z`,
-          color: PAIR_STROKE
-        })
-      })
-
-      setLinks(drawn)
-      const w = container.scrollWidth, h = container.scrollHeight
-      setSize((prev) => prev.w === w && prev.h === h ? prev : { w, h })
-    }
-
-    compute()
-    const ro = new ResizeObserver(compute)
-    ro.observe(container)
-    container.addEventListener('scroll', compute)
-    window.addEventListener('resize', compute)
-    return () => {
-      ro.disconnect()
-      container.removeEventListener('scroll', compute)
-      window.removeEventListener('resize', compute)
-    }
-  }, [root])
+  const [linkedId, setLinkedId] = useState<number | undefined>(undefined)
 
   return (
     <div className="hf">
@@ -302,16 +272,9 @@ function HoverflyTree({ root, onClick, onWrite, scriptHasSorry }: {
         <div className="banner-done">
           ✓ Proof complete — a closing tactic sequence has been found.
         </div>}
-      <div className="treeA" ref={treeRef}>
-        <svg className="pair-arrows" width={size.w} height={size.h}>
-          {links.map((l: DrawnLink, i: number) =>
-            <g key={i} stroke={l.color} fill="none">
-              <path d={l.d} strokeWidth={1.5} />
-              <path d={l.head} fill={l.color} stroke="none" />
-            </g>)}
-        </svg>
-        <ul>
-          {renderNode(root, onClick)}
+      <div className="treeA">
+        <ul className="kids flush">
+          {renderNode(root, { onClick, linkedId, setLinkedId })}
         </ul>
       </div>
       <div className="toolbar">

@@ -23,6 +23,7 @@ export type APINode = {
   noop: boolean
   originalId?: number | null
   leanOrder?: number | null
+  sharedMVars?: string[] | null
 }
 
 export type NodeAndStateRef = { node: Node, stateRef: APIData }
@@ -67,10 +68,11 @@ export function APINodeToNode(n: APINode): Node {
 function APIClusterToNode(goals: APINode[]): Node {
   const children = goals.map(APINodeToNode)
   const ids = children.map((c) => c.id)
+  const shared = goals[0]?.sharedMVars ?? []
   return {
     kind: 'cluster',
     id: ids.length > 0 ? -1 - Math.min(...ids) : -1,
-    display: '',
+    display: shared.join(', '),
     tacticError: undefined,
     noop: false,
     originalId: undefined,

@@ -166,6 +166,14 @@ export function isInactive(n: Node): boolean {
   return n.redirectTo !== undefined
 }
 
+// The frontier. We use this to track the things that the user should currently be
+// focused on.
+export function isFrontier(n: Node): boolean {
+  return n.kind === 'goal' && !n.completed && !isInactive(n)
+    && !navChildren(n).some(
+      (c: Node) => c.status === 'selected' || c.status === 'semiselected')
+}
+
 // Recompute the `completed` flag for every node from the structure of the
 // tree. Completion is derived rather than stored, to keep us from having to
 // maintain it at every node separately.

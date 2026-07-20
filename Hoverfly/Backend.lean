@@ -28,6 +28,7 @@ structure APINode where
   noop : Bool := false
   originalId : Option StateId := none
   leanOrder : Nat := 0
+  sharedMVars : List String := []
   deriving ToJson, FromJson
 
 structure GetSubgoalsParams where
@@ -163,8 +164,12 @@ def getSubgoals
               | (gss, goalMap, clusterMap, count) => do
                 let (gs, newMap, newCount) ← mvarIds.foldlM f ([], goalMap, count)
                 let members := gs.map (·.id)
-                let info : ClusterInfo := { members, sharedMVars := ← sharedMVars mvarIds }
+                let shared ← sharedMVars mvarIds
+                let info : ClusterInfo := { members, sharedMVars := shared }
                 let newClusterMap := members.foldl (·.insert · info) clusterMap
+                let sharedNames ← shared.mapM fun m =>
+                  return (← ppExpr (mkMVar m)).pretty
+                let gs := gs.map ({ · with sharedMVars := sharedNames })
                 return (gs :: gss, newMap, newClusterMap, newCount)
             let (goalsRev, newGoalMap, newClusterMap, newCounter) ←
               clusters.foldlM g ([], goalMap, clusterMap, nodeCounter)
