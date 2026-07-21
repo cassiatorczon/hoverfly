@@ -26,6 +26,7 @@ structure APINode where
   display : String
   tacticError : Option String := none
   noop : Bool := false
+  solvesGoal : Bool := false -- todo: maybe make this and noop an enum?
   originalId : Option StateId := none
   leanOrder : Nat := 0
   sharedMVars : List String := []
@@ -245,20 +246,24 @@ def getApplicableTactics
   : RequestM (RequestTask ((List APINode) × WithRpcRef State)) :=
   RequestM.withWaitFindSnapAtPos _params.pos fun snap => do
     RequestM.runTermElabM snap do
-      -- get counter and maps
+      -- get all tactics, counter, and maps
       let {allTactics, nodeCounter, goalMap, tacticMap, clusterMap}
         := _params.stateRef.val
 
-      -- get mvarId and proof state for goal (TODO: necessary?)
+      -- get mvarId and proof state for goal
       match goalMap.get? _params.id with
       | some (mvarId, proofState) =>
-        let ts := allTactics.map (fun t => (t, t.raw.prettyPrint.pretty))
 
         liftM (restoreStateFull proofState : Lean.Elab.TermElabM Unit)
+
+        -- get display of tactics and add tactics that take an arg from the context
+        let ts := allTactics.map (fun t => (t, t.raw.prettyPrint.pretty))
         let mut tsArray := ts.toArray
         let lctx := (← liftM (mvarId.getDecl : Elab.TermElabM _)).lctx
         -- let lctx ← liftM (Lean.LocalContext.sanitizeNames lctx : Elab.TermElabM LocalContext)
         let allDecls := lctx.decls.toList
+        -- for each tactic that takes an arg and each declaration in the context
+        -- add the tactic applied to that declaration
         for tac in argTactics do
           for decl? in allDecls do
             let some decl := decl? | continue
@@ -272,32 +277,35 @@ def getApplicableTactics
             tsArray := tsArray.push ({raw:=t}, display)
         let ts' := tsArray.toList
 
-
-        -- run each tactic, recording the error message if it failed and whether
-        -- it left the proof state unchanged
+        -- run each tactic, recording the error message if it failed
+        -- return tactic, display for tactic, whether it's a noop, and whether it solves the goal
         let evalTac t :
-            RequestT Elab.TermElabM (Syntax × Option String × Bool) := do
+            RequestT Elab.TermElabM (Syntax × Option String × Bool × Bool) := do
           liftM (restoreStateFull proofState : Lean.Elab.TermElabM Unit)
-          /- run the tactic
-            - if the tactic throws, record the error message
-            - if the tactic "fails softly" (logs an error-severity message), record the error message
-            - if the tactic doesn't assign or change the goal, mark it no-op -/
+          -- get existing messages before running the tactic
           let msgsBefore ←
             liftM ((do return (← getThe Core.State).messages.toList) : Elab.TermElabM _)
           try
+            -- run the tactic
             let goals ← Elab.Term.withoutErrToSorry do
               run mvarId do
                 evalTactic t
+            -- get new messages
             let newMsgs ←
               liftM ((do return (← getThe Core.State).messages.toList.drop msgsBefore.length)
                 : Elab.TermElabM _)
             match newMsgs.find? (fun m => m.severity matches .error) with
-            | some err => return (t, some (← err.data.toString), false)
+            | some err =>
+              -- if the tactic "fails softly" (logs an error-severity message), record the error message
+              return (t, some (← err.data.toString), false, false)
             | none =>
+              -- if the tactic doesn't assign or change the goal, mark it noop
+              -- if the tactic results in 0 goals and assigns the mvar, mark it as solving the goal
               let assigned ← liftM (mvarId.isAssigned : Lean.Elab.TermElabM Bool)
-              return (t, none, goals == [mvarId] && !assigned)
+              return (t, none, goals == [mvarId] && !assigned, goals == [] && assigned)
           catch e =>
-            return (t, some (← e.toMessageData.toString), false)
+            -- if the tactic throws, record the error message
+            return (t, some (← e.toMessageData.toString), false, false)
         let results ← ts'.mapM (fun (t, display) => return (← evalTac t, display))
         liftM (restoreStateFull proofState : Lean.Elab.TermElabM Unit)
 
@@ -306,11 +314,11 @@ def getApplicableTactics
 
         -- add each new tactic to map and return nodes and updated counter
         let f acc res := match acc, res with
-          | (nodes, tempTacticMap, c), ((stx, tacErr, noop), display) =>
+          | (nodes, tempTacticMap, c), ((stx, tacErr, noop, solvesGoal), display) =>
             let apiNode : APINode :=
               {isGoal := false, id := c,
                 display := display,
-                tacticError := tacErr, noop := noop}
+                tacticError := tacErr, noop := noop, solvesGoal := solvesGoal}
             let tacticInfo := (stx, _params.id)
             let newMap := tempTacticMap.insert c tacticInfo
             (apiNode :: nodes, newMap, c + 1)

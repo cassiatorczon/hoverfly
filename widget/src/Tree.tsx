@@ -11,6 +11,7 @@ type MutableNode = {
   display: string, // display
   tacticError: string | undefined, // for failing tactics: why it failed; undefined ⇒ succeeded (or goal)
   noop: boolean, // for tactics: succeeded but left the proof state unchanged
+  solvesGoal: boolean // for tactics: solves the goal
   originalId: ID | undefined, // the ID of the node this has been copied from, if applicable
   leanOrder?: number, // for goals: position in Lean's goal order under the parent tactic
   completed: boolean, // a completed goal or tactic with all completed subgoals

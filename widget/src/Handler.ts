@@ -21,6 +21,7 @@ export type APINode = {
   display: string
   tacticError: string | null
   noop: boolean
+  solvesGoal: boolean
   originalId?: number | null
   leanOrder?: number | null
   sharedMVars?: string[] | null
@@ -36,6 +37,7 @@ export function APINodeToNode(n: APINode): Node {
       display: n.display,
       tacticError: undefined,
       noop: false,
+      solvesGoal: false,
       originalId: n.originalId ?? undefined,
       leanOrder: n.leanOrder ?? undefined,
       completed: false,
@@ -53,6 +55,7 @@ export function APINodeToNode(n: APINode): Node {
       display: n.display,
       tacticError: n.tacticError ?? undefined,
       noop: n.noop,
+      solvesGoal: n.solvesGoal,
       originalId: undefined,
       completed: false,
       status: 'unselected',
@@ -75,6 +78,7 @@ function APIClusterToNode(goals: APINode[]): Node {
     display: shared.join(', '),
     tacticError: undefined,
     noop: false,
+    solvesGoal: false,
     originalId: undefined,
     completed: false,
     status: 'unselected',
