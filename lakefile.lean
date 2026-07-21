@@ -4,6 +4,9 @@ open Lake DSL System
 package "hoverfly" where
   version := v!"0.1.0"
 
+require aesop from git
+  "https://github.com/leanprover-community/aesop" @ "v4.32.0"
+
 require ProofWidgets4 from git
   "https://github.com/leanprover-community/ProofWidgets4" @ "v0.0.105"
 
