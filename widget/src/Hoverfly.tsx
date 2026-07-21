@@ -194,7 +194,7 @@ function renderNode(n: Node, ctx: RenderCtx, orphaned = false)
       <li key={n.id}>
         <div className="cluster">
           <div className="cluster-label">
-            entangled goals; they must agree on {shared}
+            these goals share the following metavariables: {shared}
           </div>
           <ul className="kids nested">
             {n.children.map((child: Node) =>
