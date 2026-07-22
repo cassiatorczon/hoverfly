@@ -17,5 +17,14 @@ add_hoverfly_tactics
     rewrite [Nat.two_mul]
   ]
 
+@[aesop safe]
+theorem foo : True := by simp
+
+add_aesop_tactics_to_hoverfly
+
 theorem demo_le_trans (a b c : Nat) (hab : a ≤ b) (hbc : b ≤ c) : a ≤ c := by
+  hoverfly
+
+theorem demo_add_assoc (n m p : Nat) :
+    n + (m + p) = (n + m) + p := by
   hoverfly
