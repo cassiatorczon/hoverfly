@@ -274,6 +274,15 @@
   color: var(--vscode-editor-foreground);
 }
 
+.hf .rowA.frontier .disp.solves-goal {
+  color: var(--done);
+}
+
+.hf .rowA .disp.solves-goal span {
+  font-family: var(--vscode-font-family);
+  font-size: 11px;
+}
+
 .hf .rowA.chosen .disp,
 .hf .rowA.settled .disp,
 .hf .rowA.tactic.fails .disp,

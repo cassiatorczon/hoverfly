@@ -87,8 +87,12 @@ function renderChildren(n: Node, ctx: RenderCtx): React.ReactNode {
     c.kind === 'tactic' && c.tacticError !== undefined
   const isNoopTactic = (c: Node) =>
     c.kind === 'tactic' && c.tacticError === undefined && c.noop
+  const isSolvesGoalTactic = (c: Node) =>
+    c.kind === 'tactic' && c.solvesGoal
   const mainChildren = n.children.filter(
-    (c: Node) => !isFailingTactic(c) && !isNoopTactic(c))
+    (c: Node) => !isFailingTactic(c) && !isNoopTactic(c) && !isSolvesGoalTactic(c))
+  const solvesGoalChildren =
+    n.children.filter((c: Node) => isSolvesGoalTactic(c) && c.visible)
   const noopChildren =
     n.children.filter((c: Node) => isNoopTactic(c) && c.visible)
   const failingChildren =
@@ -96,6 +100,7 @@ function renderChildren(n: Node, ctx: RenderCtx): React.ReactNode {
 
   return (
     <ul className="kids flush">
+      {solvesGoalChildren.map((child: Node) => renderNode(child, ctx))}
       {mainChildren.map((child: Node) => renderNode(child, ctx))}
       {noopChildren.length > 0 &&
         <li>
@@ -207,6 +212,7 @@ function renderNode(n: Node, ctx: RenderCtx, orphaned = false)
 
   const marker = n.kind === 'goal' ? '⏹' : '⋅'
   const failed = n.kind === 'tactic' && n.tacticError !== undefined
+  const solvesGoal = n.kind === 'tactic' && n.solvesGoal
   const successClass = n.kind === 'tactic'
     ? (failed ? 'fails' : n.noop ? 'noop' : 'succeeds') : ''
   const inactive = isInactive(n)
@@ -233,7 +239,11 @@ function renderNode(n: Node, ctx: RenderCtx, orphaned = false)
           ? "Still open — this goal needs a proof" : undefined}>
         {marker}
       </span>
-      <span className="disp">{n.display}</span>
+      <span className={solvesGoal ? "disp solves-goal" : "disp"}>
+        {n.display}
+        {solvesGoal &&
+          <span> [Solves the current goal.]</span>}
+      </span>
       {n.redirectTo !== undefined &&
         <RedirectStub dir="out" target={n.redirectTo} ctx={ctx}
           title={"This goal continues as #" + n.redirectTo + ", carried under "
