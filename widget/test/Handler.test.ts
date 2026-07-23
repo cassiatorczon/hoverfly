@@ -125,12 +125,28 @@ test('sibling switch is reversible: switching back restores the cached branch',
       'goal 2 tactics fetched exactly once (first visit), not on restore')
   })
 
-test('clicking the already-selected node is a no-op', async () => {
+test('clicking the already-selected node backtracks to its parent', async () => {
   const s = await makeSession(foobarResponder)
   await s.click(1)
+  const callsBefore = s.calls.length
+  await s.click(1) // tactic 1 is already selected: "double click" unselects it
+
+  const tree = s.get()
+  assert.equal(tree.status, 'selected', 'selection moves up to the root')
+  assert.equal(countSelected(tree), 1)
+  const tactic1 = findById(tree, 1)!
+  assert.equal(tactic1.status, 'unselected')
+  assert.deepEqual(tactic1.children, [], 'abandoned branch is collapsed')
+  assert.ok(tactic1.cache, 'collapsed branch is cached for later restore')
+  assert.equal(s.calls.length, callsBefore,
+    'backtracking is pure tree surgery, no backend calls')
+})
+
+test('clicking the already-selected root is a no-op', async () => {
+  const s = await makeSession(foobarResponder)
   const before = s.get()
   const callsBefore = s.calls.length
-  await s.click(1) // tactic 1 is already selected
+  await s.click(0) // the root is selected from the start
   assert.equal(s.get(), before, 'tree reference unchanged')
   assert.equal(s.calls.length, callsBefore, 'no backend calls made')
 })
