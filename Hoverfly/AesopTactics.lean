@@ -8,9 +8,9 @@ public import Hoverfly.Attribute
 
 public meta section
 
-open Lean Elab Command
-/- Aesop tactic integration -/
-def foobar : Syntax := Syntax.atom SourceInfo.none "need to implement this"
+open Lean Elab Command Meta
+
+def foobar : (TSyntax `tactic) := {raw:=Syntax.atom SourceInfo.none "need to implement this"}
 
 def addMode (stxM : CommandElabM (TSyntax `tactic)) (md : Meta.TransparencyMode) :
   CommandElabM (TSyntax `tactic) := do
@@ -25,7 +25,7 @@ def addMode (stxM : CommandElabM (TSyntax `tactic)) (md : Meta.TransparencyMode)
   | .none => `(tactic| with_unfolding_none $stx:tactic)
 
 open Aesop RuleTacDescr RuleTerm in
-def ruleTacDescrToStx (descr : RuleTacDescr) : CommandElabM (Option Syntax) :=
+def ruleTacDescrToStx (descr : RuleTacDescr) : CommandElabM (Option (TSyntax `tactic)) :=
   match descr with
   | apply t md =>
     match t with
@@ -43,7 +43,7 @@ def ruleTacDescrToStx (descr : RuleTacDescr) : CommandElabM (Option Syntax) :=
   | ruleTac (decl : Name) => return foobar--none --TODO
   | tacGen (decl : Name) => return foobar--none --TODO
   | singleRuleTac (decl : Name) => return foobar--none --TODO
-  | tacticStx (stx : Syntax) => return (some stx)
+  | tacticStx (stx : Syntax) => return (some {raw:=stx})
   | preprocess => return foobar--none --TODO
   | forwardMatches (ms : Array ForwardRuleMatch) => return foobar--none --TODO
 
