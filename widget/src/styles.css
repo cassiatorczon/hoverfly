@@ -203,8 +203,16 @@
   font-family: var(--mono);
   font-size: 11px;
   flex: none;
-  width: 1.3em;
+  min-width: 1.3em;
   text-align: center;
+  color: var(--vscode-disabledForeground);
+}
+
+.hf .rowA .marker .marker-badge {
+  font-family: var(--vscode-font-family);
+  padding: 1px 2px;
+  border-radius: 3px;
+  border: 1px solid currentColor;
 }
 
 .disp {
@@ -252,10 +260,6 @@
   flex: none;
   font-size: 10px;
   opacity: .6;
-}
-
-.hf .rowA .marker {
-  color: var(--vscode-disabledForeground);
 }
 
 .hf .rowA.frontier .marker {

@@ -265,6 +265,15 @@ export type BadgeKind =
   | 'explored'      // • visited, nothing proven
   | 'none'          // no badge
 
+export type MarkerKind = 'goal' | 'run' | 'backtrack' | 'dot'
+
+export function markerFor(n: Node): MarkerKind {
+  if (n.kind !== 'tactic') return 'goal'
+  if (n.status === 'selected' || n.status === 'semiselected') return 'backtrack'
+  if (n.tacticError !== undefined || n.noop) return 'dot'
+  return 'run'
+}
+
 export function badgeFor(n: Node, orphaned: boolean): BadgeKind {
   // A copied goal has no badge: any proof it holds is moot until backtracking reactivates it. The
   // greying and `↪` redirect already mark it.

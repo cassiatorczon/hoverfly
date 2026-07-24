@@ -7,6 +7,7 @@ import {
   recomputeInactive,
   isInactive,
   badgeFor,
+  markerFor,
   cacheChild,
   nearestCommonAncestorWithSelected,
   navChildren,
@@ -318,6 +319,28 @@ test('badgeFor: a cached tactic reads as cached-done (complete) or cached (parti
 test('badgeFor: an explored-but-unproven node shows the explored dot, else nothing', () => {
   assert.equal(badgeFor(goal(1, 'g', { explored: true }), false), 'explored')
   assert.equal(badgeFor(goal(1, 'g', { explored: false }), false), 'none')
+})
+
+/* markerFor */
+
+test('markerFor: goals get the goal glyph', () => {
+  assert.equal(markerFor(goal(1, 'g')), 'goal')
+  assert.equal(markerFor(goal(1, 'g', { status: 'selected' })), 'goal')
+})
+
+test('markerFor: a succeeding tactic off the active path offers Run', () => {
+  assert.equal(markerFor(tactic(1, 't')), 'run')
+})
+
+test('markerFor: a tactic on the active path offers Backtrack', () => {
+  assert.equal(markerFor(tactic(1, 't', { status: 'selected' })), 'backtrack')
+  assert.equal(
+    markerFor(tactic(1, 't', { status: 'semiselected' })), 'backtrack')
+})
+
+test('markerFor: failing and no-op tactics advertise no action', () => {
+  assert.equal(markerFor(tactic(1, 't', { tacticError: 'nope' })), 'dot')
+  assert.equal(markerFor(tactic(1, 't', { noop: true })), 'dot')
 })
 
 /* navChildren */

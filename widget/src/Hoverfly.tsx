@@ -21,6 +21,8 @@ import {
   Node,
   BadgeKind,
   badgeFor,
+  MarkerKind,
+  markerFor,
   selectRoot,
   findDescendant,
   isInactive,
@@ -152,6 +154,21 @@ function renderBadge(kind: BadgeKind): React.ReactNode {
   }
 }
 
+function renderMarker(kind: MarkerKind): React.ReactNode {
+  switch (kind) {
+    case 'goal':
+      return '⏹'
+    case 'run':
+      return <span className="marker-badge"
+        title="Apply the tactic">Run</span>
+    case 'backtrack':
+      return <span className="marker-badge"
+        title="Return to this point (your progress will be saved)">Backtrack</span>
+    case 'dot':
+      return '⋅'
+  }
+}
+
 type RenderCtx = {
   onClick: (clicked: Node) => Promise<void>,
   linkedId: number | undefined,
@@ -210,7 +227,6 @@ function renderNode(n: Node, ctx: RenderCtx, orphaned = false)
     )
   }
 
-  const marker = n.kind === 'goal' ? '⏹' : '⋅'
   const failed = n.kind === 'tactic' && n.tacticError !== undefined
   const solvesGoal = n.kind === 'tactic' && n.solvesGoal
   const successClass = n.kind === 'tactic'
@@ -227,6 +243,7 @@ function renderNode(n: Node, ctx: RenderCtx, orphaned = false)
       : frontier ? 'frontier'
         : onPath ? 'chosen'
           : ''
+  const marker = renderMarker(markerFor(n))
 
   const row = (
     <div className={`rowA ${n.kind} ${n.status} ${successClass} ${stateClass}`
