@@ -1,6 +1,7 @@
 import ProofWidgets
 
 import Hoverfly.Attribute
+import Hoverfly.AesopTactics
 
 namespace Backend
 open Lean ProofWidgets Server Lean.Meta Lean.Elab.Tactic
