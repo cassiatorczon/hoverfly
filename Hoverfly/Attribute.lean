@@ -64,16 +64,29 @@ initialize Batteries.Linter.UnreachableTactic.addIgnoreTacticKind ``addTacs
 /- Aesop tactic integration -/
 def foobar : Syntax := Syntax.atom SourceInfo.none "need to implement this"
 
+def addMode (stxM : CommandElabM (TSyntax `tactic)) (md : Meta.TransparencyMode) :
+  CommandElabM (TSyntax `tactic) := do
+  let stx ← stxM
+  match md with
+  | .all => `(tactic| with_unfolding_all $stx:tactic)
+  | .default => return stx
+  | .reducible =>
+    `(tactic| with_reducible $stx:tactic)
+  | .instances =>
+    `(tactic| with_reducible_and_instances $stx:tactic)
+  | .none => `(tactic| with_unfolding_none $stx:tactic)
+
 open Aesop RuleTacDescr RuleTerm in
 def ruleTacDescrToStx (descr : RuleTacDescr) : CommandElabM (Option Syntax) :=
   match descr with
   | apply t md =>
     match t with
       | const decl =>
-        do return ((← `(tactic| apply $(mkIdent decl):ident)).raw)
-      | term t =>
-        do return ((← `(tactic| apply t)).raw) --TODO
-  | constructors (constructorNames : Array Name) md => return foobar--none --TODO
+        addMode (`(tactic | apply $(mkIdent decl):ident)) md
+      | term tm =>
+        addMode (`(tactic | apply $tm:term)) md
+  | constructors (constructorNames : Array Name) md =>
+    return foobar--none --TODO
   | forward (t : RuleTerm) (immediate : UnorderedArraySet PremiseIndex)
       (isDestruct : Bool) => return foobar--none --TODO
   | cases (target : CasesTarget) md
@@ -101,7 +114,7 @@ elab (name := addAesopTacs)
     let rules ← ruleDescrs.filterMapM ruleTacDescrToStx
     rules.forM (fun tac => modifyEnv fun env => hoverflyTacticExt.addEntry env {raw:=tac})
 
-initialize Batteries.Linter.UnreachableTactic.addIgnoreTacticKind ``addTacs
+initialize Batteries.Linter.UnreachableTactic.addIgnoreTacticKind ``addAesopTacs
 
 
 /-
