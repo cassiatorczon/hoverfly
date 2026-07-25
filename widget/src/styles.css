@@ -203,8 +203,8 @@
   font-family: var(--mono);
   font-size: 11px;
   flex: none;
-  min-width: 1.3em;
-  text-align: center;
+  width: 2.9em;
+  text-align: left;
   color: var(--vscode-disabledForeground);
 }
 
@@ -239,12 +239,14 @@
   color: var(--cached);
   flex: none;
   font-size: 15px;
+  line-height: 1;
 }
 
 .hf .rowA .badge-cached-done {
   color: var(--done);
   flex: none;
   font-size: 11px;
+  line-height: 1;
 }
 
 .hf .rowA .badge-orphaned {
@@ -259,6 +261,7 @@
   color: var(--vscode-disabledForeground);
   flex: none;
   font-size: 10px;
+  line-height: 1;
   opacity: .6;
 }
 

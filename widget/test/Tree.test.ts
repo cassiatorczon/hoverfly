@@ -332,10 +332,15 @@ test('markerFor: a succeeding tactic off the active path offers Run', () => {
   assert.equal(markerFor(tactic(1, 't')), 'run')
 })
 
-test('markerFor: a tactic on the active path offers Backtrack', () => {
-  assert.equal(markerFor(tactic(1, 't', { status: 'selected' })), 'backtrack')
+test('markerFor: a tactic on the active path offers Undo', () => {
+  assert.equal(markerFor(tactic(1, 't', { status: 'selected' })), 'undo')
   assert.equal(
-    markerFor(tactic(1, 't', { status: 'semiselected' })), 'backtrack')
+    markerFor(tactic(1, 't', { status: 'semiselected' })), 'undo')
+})
+
+test('markerFor: an off-path tactic with a cache offers Redo', () => {
+  assert.equal(
+    markerFor(tactic(1, 't', { cache: tactic(1, 't') })), 'redo')
 })
 
 test('markerFor: failing and no-op tactics advertise no action', () => {

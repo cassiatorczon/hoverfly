@@ -265,12 +265,13 @@ export type BadgeKind =
   | 'explored'      // • visited, nothing proven
   | 'none'          // no badge
 
-export type MarkerKind = 'goal' | 'run' | 'backtrack' | 'dot'
+export type MarkerKind = 'goal' | 'run' | 'undo' | 'redo' | 'dot'
 
 export function markerFor(n: Node): MarkerKind {
   if (n.kind !== 'tactic') return 'goal'
-  if (n.status === 'selected' || n.status === 'semiselected') return 'backtrack'
+  if (n.status === 'selected' || n.status === 'semiselected') return 'undo'
   if (n.tacticError !== undefined || n.noop) return 'dot'
+  if (n.cache) return 'redo'
   return 'run'
 }
 

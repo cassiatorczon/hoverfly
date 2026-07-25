@@ -161,9 +161,12 @@ function renderMarker(kind: MarkerKind): React.ReactNode {
     case 'run':
       return <span className="marker-badge"
         title="Apply the tactic">Run</span>
-    case 'backtrack':
+    case 'undo':
       return <span className="marker-badge"
-        title="Return to this point (your progress will be saved)">Backtrack</span>
+        title="Return to this point (your progress will be saved)">Undo</span>
+    case 'redo':
+      return <span className="marker-badge"
+        title="Restore your saved progress">Redo</span>
     case 'dot':
       return '⋅'
   }
