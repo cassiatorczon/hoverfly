@@ -244,7 +244,7 @@ test('cluster: backtracking off the driving tactic reactivates the sibling',
     await s.click(5) // sibling 3 inactivated
     assert.equal(isInactive(findById(display(s.get()), 3)!), true)
 
-    await s.click(2) // backtrack to w ≤ ?b: caches the driving tactic (+copy)
+    await s.click(5) // back out of the driving tactic to w ≤ ?b (caches +copy)
 
     assert.equal(isInactive(findById(display(s.get()), 3)!), false,
       'with the copy stashed in cache, the sibling is active again')
@@ -256,7 +256,7 @@ test('cluster: roles flip when the other sibling drives the assignment',
     await s.click(1)
     await s.click(2)
     await s.click(5) // drive from goal 2 -> goal 3 inactive
-    await s.click(2) // backtrack
+    await s.click(5) // back out of the driving tactic to goal 2
     await s.click(3) // switch to the sibling ?b ≤ z
     await s.click(8) // exact h7: assigns ?b := 7, carries copy 9 of goal 2
 
@@ -275,7 +275,7 @@ test('cluster: after a role-flip, closing the copy still completes the proof',
     await s.click(1)
     await s.click(2)
     await s.click(5) // drive from goal 2 (explores goal 2's subtree)
-    await s.click(2) // backtrack
+    await s.click(5) // back out of the driving tactic to goal 2
     await s.click(3) // switch to the sibling
     await s.click(8) // drive from goal 3 -> goal 2 inactive + cached
 
@@ -299,10 +299,10 @@ test('cluster: flip back to the first driver and finish through its cache',
     await s.click(1)
     await s.click(2)
     await s.click(5) // drive goal 2
-    await s.click(2) // backtrack
-    await s.click(3) // to goal 3
+    await s.click(5) // click the selected tactic again to back out to goal 2
+    await s.click(3) // switch to sibling goal 3
     await s.click(8) // drive goal 3 -> goal 2 branch cached
-    await s.click(3) // backtrack off goal 3's tactic
+    await s.click(8) // back out of goal 3's tactic to goal 3
     await s.click(2) // back to goal 2: reactivates and restores its cache
 
     assert.equal(isInactive(findById(display(s.get()), 2)!), false,

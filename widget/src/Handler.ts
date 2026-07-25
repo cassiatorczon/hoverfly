@@ -134,23 +134,20 @@ export async function handleClick(
   rs: RpcSessionAtPos,
   pos: DocumentPosition): Promise<NodeAndStateRef> {
 
-  if (clicked.status === 'selected') {
-    // User has clicked the already-selected node.
-
-    // if the node was the root, do nothing
-    if (clicked.id === root.id) {
-      console.info("Node " + clicked.id + " was already selected.")
+  if ((clicked.status === 'selected' || clicked.status === 'semiselected')
+    && clicked.id !== root.id) {
+    // Once a node is selected, clicking it _undoes_ the click; this has the
+    // effect of triggering a click event on the node's parent.
+    const parent = getNavParent(root, clicked.id)
+    if (!parent) {
+      // TODO error: this could mean we somehow didn't find clicked.id in the
+      // tree, or we clicked a cluster node somehow
       return { node: root, stateRef }
-    } else {
-      // "unselect" a node on double click, i.e. select its parent
-      const parentCand = getNavParent(root, clicked.id)
-      if (parentCand) {
-        return handleClick(root, stateRef, parentCand, rs, pos)
-      } else {
-        //TODO error: this could mean we somehow didn't find clicked.id in the tree, or we clicked a cluster node somehow
-        return { node: root, stateRef }
-      }
     }
+    clicked = parent
+  } else if (clicked.status === 'selected' && clicked.id === root.id) {
+    // If the root is selected and clicked, do nothing.
+    return { node: root, stateRef }
   } else {
     console.debug("Clicked unselected node: " + clicked.id + ".")
   }
