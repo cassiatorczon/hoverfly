@@ -79,7 +79,7 @@ function renderChildren(n: Node, ctx: RenderCtx): React.ReactNode {
 
   if (n.kind !== 'goal') {
     return (
-      <ul className="kids flush">
+      <ul className="kids nested">
         {n.children.map((child: Node) => renderNode(child, ctx))}
       </ul>
     )
@@ -101,7 +101,7 @@ function renderChildren(n: Node, ctx: RenderCtx): React.ReactNode {
     n.children.filter((c: Node) => isFailingTactic(c) && c.visible)
 
   return (
-    <ul className="kids flush">
+    <ul className="kids nested">
       {solvesGoalChildren.map((child: Node) => renderNode(child, ctx))}
       {mainChildren.map((child: Node) => renderNode(child, ctx))}
       {noopChildren.length > 0 &&
