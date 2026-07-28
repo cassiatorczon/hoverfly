@@ -234,6 +234,7 @@ private def argTactics : List (Name → CoreM (Syntax × String)) :=
   [
     fun x => do return ((← `(tactic| induction $(mkIdent x):ident)).raw, "induction " ++ nameToString x),
     fun x => do return ((← `(tactic| cases $(mkIdent x):ident)).raw, "cases " ++ nameToString x),
+    fun x => do return ((← `(tactic| revert $(mkIdent x):ident)).raw, "revert " ++ nameToString x),
     fun x => do
       return ((← `(tactic| exists $(mkIdent x):term)).raw, "exists " ++ nameToString x),
     -- fun x => do return (← `(tactic| rw [$(mkIdent x):ident])).raw
