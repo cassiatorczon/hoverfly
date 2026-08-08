@@ -2,24 +2,11 @@ import ProofWidgets
 
 import Hoverfly.Attribute
 import Hoverfly.AesopTactics
+import Hoverfly.FunTac
+import Hoverfly.State
 
 namespace Backend
-open Lean ProofWidgets Server Lean.Meta Lean.Elab.Tactic
-
-def StateId := Nat
-  deriving OfNat, BEq, Hashable, ToJson, FromJson, HAdd, ToString
-
-structure ClusterInfo where
-  members : List StateId
-  sharedMVars : List MVarId
-
-structure State where
-  allTactics : List (TSyntax `tactic)
-  nodeCounter : StateId := 0
-  goalMap : Std.HashMap StateId (MVarId × Elab.Term.SavedState) := ∅
-  tacticMap : Std.HashMap StateId (Syntax × StateId) := ∅
-  clusterMap : Std.HashMap StateId ClusterInfo := ∅
-  deriving TypeName
+open Lean ProofWidgets Server Lean.Meta Lean.Elab.Tactic State
 
 structure APINode where
   isGoal : Bool
@@ -35,7 +22,7 @@ structure APINode where
 
 structure GetSubgoalsParams where
   id : StateId
-  stateRef : WithRpcRef State
+  stateRef : WithRpcRef State.State
   pos : Lsp.Position
   deriving RpcEncodable
 
@@ -89,31 +76,10 @@ def carriedSiblings
       | some (smv, _) =>
         if ← smv.isAssigned then return none else return some (smv, sid)
 
-/--
-Like `restoreState`, but *also* rewinds the name generator (and the macro-scope and
-auxiliary-declaration generators) to the values captured in `s`.
-
-`Core.SavedState.restore` deliberately restores only `env`/`messages`/`infoState` and
-leaves `ngen` alone, because within a single elaboration thread the name generator only
-ever moves forward, so it must not be rolled back. That assumption breaks for us: every
-RPC request runs in a *fresh* `RequestM.runTermElabM` seeded from the `hoverfly`
-snapshot's command state, so `ngen` is reset to the snapshot value on each call. Plain
-`restoreState` then leaves `ngen` pointing *before* the `FVarId`/`MVarId`s that were
-allocated (in a previous request) and baked into `s`'s metavariable context. The next
-tactic re-issues those exact ids, clobbering the goal mvar and hypotheses in the restored
-context — which surfaces as nonsense like `function expected ?α`. Restoring `ngen` makes
-fresh allocations continue *past* everything already in `s`. -/
-def restoreStateFull (s : Lean.Elab.Term.SavedState) : Lean.Elab.TermElabM Unit := do
-  restoreState s
-  modifyThe Core.State fun st => { st with
-    ngen           := s.meta.core.ngen
-    nextMacroScope := s.meta.core.nextMacroScope
-    auxDeclNGen    := s.meta.core.auxDeclNGen }
-
 @[server_rpc_method]
 def getSubgoals
   (_params : GetSubgoalsParams)
-  : RequestM (RequestTask ((List (List APINode)) × WithRpcRef State)) :=
+  : RequestM (RequestTask ((List (List APINode)) × WithRpcRef State.State)) :=
   RequestM.withWaitFindSnapAtPos _params.pos fun snap => do
     RequestM.runTermElabM snap do
       -- get counter and maps
@@ -215,7 +181,7 @@ def getSubgoals
 
 structure GetApplicableTacticsParams where
   id : StateId
-  stateRef : WithRpcRef State
+  stateRef : WithRpcRef State.State
   pos : Lsp.Position
   deriving RpcEncodable
 
@@ -245,7 +211,7 @@ private def argTactics : List (Name → CoreM (Syntax × String)) :=
 @[server_rpc_method]
 def getApplicableTactics
   (_params : GetApplicableTacticsParams)
-  : RequestM (RequestTask ((List APINode) × WithRpcRef State)) :=
+  : RequestM (RequestTask ((List APINode) × WithRpcRef State.State)) :=
   RequestM.withWaitFindSnapAtPos _params.pos fun snap => do
     RequestM.runTermElabM snap do
       -- get all tactics, counter, and maps
@@ -373,7 +339,7 @@ elab stx:"hoverfly" : tactic => do
     ]
 
   -- initialize state
-  let initialState : State := {
+  let initialState : State.State := {
       allTactics := tacs ++ lemmaApps.toList -- TODO, we need the rest
       nodeCounter := rootGoal.id + 1,
       goalMap := initialGoalMap,
