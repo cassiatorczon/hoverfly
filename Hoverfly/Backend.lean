@@ -110,6 +110,17 @@ def restoreStateFull (s : Lean.Elab.Term.SavedState) : Lean.Elab.TermElabM Unit 
     nextMacroScope := s.meta.core.nextMacroScope
     auxDeclNGen    := s.meta.core.auxDeclNGen }
 
+/-- Run tactic `stx` against goal `mvarId`. Same as `run mvarId (evalTactic stx)`, except that
+Lean's runtime exceptions are rethrown as ordinary ones.
+
+This fixes a bug where `simp` running out of heartbeats was crashing hoverfly rather than showing up
+as `simp` failing. -/
+def runTacticSafely (mvarId : MVarId) (stx : Syntax) : Lean.Elab.TermElabM (List MVarId) :=
+  tryCatchRuntimeEx
+    (Core.withCurrHeartbeats <| Elab.Term.withoutErrToSorry <| run mvarId do evalTactic stx)
+    fun e => do
+      if e.isRuntime then throwError "{← e.toMessageData.toString}" else throw e
+
 @[server_rpc_method]
 def getSubgoals
   (_params : GetSubgoalsParams)
@@ -133,9 +144,8 @@ def getSubgoals
 
           try
             -- run tactic
-            let rawResult : List Lean.MVarId <- Elab.Term.withoutErrToSorry do
-              run mvarId do
-                evalTactic stx
+            let rawResult : List Lean.MVarId ←
+              liftM (runTacticSafely mvarId stx : Lean.Elab.TermElabM _)
             let result ← dropMVarGoals rawResult
 
             let copies ← carriedSiblings clusterMap goalMap parentId
@@ -289,9 +299,7 @@ def getApplicableTactics
             liftM ((do return (← getThe Core.State).messages.toList) : Elab.TermElabM _)
           try
             -- run the tactic
-            let goals ← Elab.Term.withoutErrToSorry do
-              run mvarId do
-                evalTactic t
+            let goals ← liftM (runTacticSafely mvarId t : Lean.Elab.TermElabM _)
             -- get new messages
             let newMsgs ←
               liftM ((do return (← getThe Core.State).messages.toList.drop msgsBefore.length)
