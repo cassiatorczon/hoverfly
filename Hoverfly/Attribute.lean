@@ -1,13 +1,15 @@
 module
 
-public meta import Lean.Elab.Command
 import Batteries.Linter.UnreachableTactic
+
+public meta import Hoverfly.TacticUtil
+public meta import Lean.Elab.Command
 
 public meta section
 
-open Lean Elab Command
+open Lean Elab Command TacticUtil FunTac State
 
--- todo: this lets us add lemmas, not tactics
+-- TODO: this lets us add lemmas, not tactics
 
 initialize hoverflyLemmaExt : SimplePersistentEnvExtension Name (Array Name) ←
   registerSimplePersistentEnvExtension {
@@ -27,13 +29,13 @@ initialize registerBuiltinAttribute {
 }
 
 initialize hoverflyTacticExt : SimplePersistentEnvExtension
-  (TSyntax `tactic) (Array (TSyntax `tactic)) ←
+  FunTac (Array FunTac) ←
   registerSimplePersistentEnvExtension {
     addEntryFn := Array.push
     addImportedFn := fun ess => ess.flatten
   }
 
-def hoverflyTactics (env : Environment) : Array (TSyntax `tactic) :=
+def hoverflyTactics (env : Environment) : Array FunTac :=
   hoverflyTacticExt.getState env
 
 syntax tac_list := "[" tactic,+,? "]"
@@ -51,9 +53,9 @@ end TacList
 
 open Lean.Elab.Command in
 elab (name := addTacs)
-    -- attrKind:attrKind
     "add_hoverfly_tactics " e:tac_list : command => do
-  let tacArray ← liftTermElabM (TacList.elab e)
+  let tacArrayStx ← liftTermElabM (TacList.elab e)
+  let tacArray := tacArrayStx.map (fun stx => tacticToFunTac stx.raw)
   tacArray.forM (fun tac => modifyEnv fun env => hoverflyTacticExt.addEntry env tac)
 
 initialize Batteries.Linter.UnreachableTactic.addIgnoreTacticKind ``addTacs
