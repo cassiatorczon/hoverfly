@@ -2,7 +2,8 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
-  recomputeCompleted, recomputeInactive, isInactive, selectRoot, navChildren, Node
+  recomputeCompleted, recomputeInactive, isInactive, selectRoot, navChildren,
+  groupTactics, groupLabel, Node
 } from '../src/Tree'
 import {
   handleClick,
@@ -352,3 +353,12 @@ test('getApplicableTactics tags only groups with more than one member',
     assert.equal(byId(3).groupId, byId(4).groupId)
     assert.notEqual(byId(2).groupId, undefined)
   })
+
+test('a tagged group renders as one collapsible entry', async () => {
+  const s = await makeSession(groupedResponder)
+  const grouped = groupTactics(s.get().children)
+  assert.deepEqual(
+    grouped.map((e) => (Array.isArray(e) ? e.map((n) => n.id) : e.id)),
+    [1, [2, 3, 4]])
+  assert.equal(groupLabel(grouped[1] as Node[]), 'induction')
+})

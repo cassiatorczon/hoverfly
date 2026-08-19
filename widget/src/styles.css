@@ -199,6 +199,43 @@
   color: var(--vscode-foreground);
 }
 
+.hf .tactic-group>summary {
+  display: block;
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+}
+
+.hf .tactic-group>summary::-webkit-details-marker {
+  display: none;
+}
+
+.hf .rowA.group-row .caret {
+  display: inline-block;
+  transition: transform .12s ease;
+}
+
+.hf .tactic-group[open]>summary .rowA.group-row .caret {
+  transform: rotate(90deg);
+}
+
+.hf .rowA.group-row .disp {
+  color: var(--vscode-editor-foreground);
+  flex: 0 1 auto;
+}
+
+.hf .rowA.group-row .group-count {
+  flex: none;
+  font-size: 10px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.hf .group-badges {
+  margin-left: auto;
+  display: inline-flex;
+  gap: 3px;
+}
+
 .hf .rowA .marker {
   font-family: var(--mono);
   font-size: 11px;

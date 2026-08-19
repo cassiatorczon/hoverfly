@@ -30,7 +30,9 @@ import {
   recomputeCompleted,
   recomputeVisible,
   recomputeInactive,
-  succeedingChildren
+  succeedingChildren,
+  groupLabel,
+  groupTactics
 } from './Tree'
 import { serializeTree } from './Serialize'
 import {
@@ -92,7 +94,8 @@ function renderChildren(n: Node, ctx: RenderCtx): React.ReactNode {
   const isSolvesGoalTactic = (c: Node) =>
     c.kind === 'tactic' && c.solvesGoal
   const mainChildren = n.children.filter(
-    (c: Node) => !isFailingTactic(c) && !isNoopTactic(c) && !isSolvesGoalTactic(c))
+    (c: Node) => !isFailingTactic(c) && !isNoopTactic(c) && !isSolvesGoalTactic(c)
+      && c.visible)
   const solvesGoalChildren =
     n.children.filter((c: Node) => isSolvesGoalTactic(c) && c.visible)
   const noopChildren =
@@ -103,7 +106,7 @@ function renderChildren(n: Node, ctx: RenderCtx): React.ReactNode {
   return (
     <ul className="kids nested">
       {solvesGoalChildren.map((child: Node) => renderNode(child, ctx))}
-      {mainChildren.map((child: Node) => renderNode(child, ctx))}
+      {renderTacticBucket(mainChildren, ctx)}
       {noopChildren.length > 0 &&
         <li>
           <details className="failing-group">
@@ -112,7 +115,7 @@ function renderChildren(n: Node, ctx: RenderCtx): React.ReactNode {
               {noopChildren.length === 1 ? 'tactic' : 'tactics'}
             </summary>
             <ul className="kids nested">
-              {noopChildren.map((child: Node) => renderNode(child, ctx))}
+              {renderTacticBucket(noopChildren, ctx)}
             </ul>
           </details>
         </li>}
@@ -124,12 +127,45 @@ function renderChildren(n: Node, ctx: RenderCtx): React.ReactNode {
               {failingChildren.length === 1 ? 'tactic' : 'tactics'}
             </summary>
             <ul className="kids nested">
-              {failingChildren.map((child: Node) => renderNode(child, ctx))}
+              {renderTacticBucket(failingChildren, ctx)}
             </ul>
           </details>
         </li>}
     </ul>
   )
+}
+
+// Render one bucket, collapsing each prototactic's instantiations.
+function renderTacticBucket(children: Node[], ctx: RenderCtx): React.ReactNode[] {
+  return groupTactics(children).map((entry: Node | Node[]) => {
+    if (!Array.isArray(entry)) return renderNode(entry, ctx)
+
+    // A collapsed member's badge would otherwise be invisible, hiding stashed progress.
+    const badges = entry.map((c: Node) => badgeFor(c, false))
+      .filter((b: BadgeKind) => b !== 'none')
+
+    return (
+      <li key={'group-' + entry[0].id}>
+        <details className="tactic-group">
+          <summary>
+            <div className="rowA tactic group-row">
+              <span className="marker"><span className="caret">▸</span></span>
+              <span className="disp">{groupLabel(entry)}</span>
+              <span className="group-count">{entry.length} options</span>
+              {badges.length > 0 &&
+                <span className="group-badges">
+                  {badges.map((b: BadgeKind, i: number) =>
+                    <Fragment key={i}>{renderBadge(b)}</Fragment>)}
+                </span>}
+            </div>
+          </summary>
+          <ul className="kids nested">
+            {entry.map((child: Node) => renderNode(child, ctx))}
+          </ul>
+        </details>
+      </li>
+    )
+  })
 }
 
 function renderBadge(kind: BadgeKind): React.ReactNode {

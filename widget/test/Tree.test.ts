@@ -14,7 +14,10 @@ import {
   updateNodes,
   changeStatusAtId,
   changeStatusAtSelected,
-  selectRoot
+  selectRoot,
+  groupLabel,
+  groupTactics,
+  Node
 } from '../src/Tree'
 import { goal, tactic, cluster, findById } from './testUtils'
 
@@ -509,4 +512,60 @@ test('changeStatusAtSelected retargets the currently selected node', async () =>
 
 test('selectRoot marks the root selected', () => {
   assert.equal(selectRoot(goal(0)).status, 'selected')
+})
+
+/* prototactic grouping */
+
+test('groupLabel names the group by the shared token prefix', () => {
+  assert.equal(
+    groupLabel([tactic(1, 'induction a'), tactic(2, 'induction hab')]),
+    'induction')
+  assert.equal(
+    groupLabel([tactic(1, 'rewrite [h] at a'), tactic(2, 'rewrite [h] at b')]),
+    'rewrite [h] at')
+})
+
+test('groupLabel falls back to a count when nothing is shared', () => {
+  assert.equal(groupLabel([tactic(1, 'simp'), tactic(2, 'omega')]), '2 variants')
+})
+
+test('groupLabel compares whole tokens, not characters', () => {
+  // 'ind' is a character prefix of 'induction' but not a shared token
+  assert.equal(groupLabel([tactic(1, 'ind a'), tactic(2, 'induction a')]),
+    '2 variants')
+})
+
+test('groupTactics coalesces runs sharing a groupId', () => {
+  const kids = [
+    tactic(1, 't1'),
+    tactic(2, 't2', { groupId: 0 }),
+    tactic(3, 't3', { groupId: 0 }),
+    tactic(4, 't4', { groupId: 1 }),
+    tactic(5, 't5')
+  ]
+  const grouped = groupTactics(kids)
+  assert.equal(grouped.length, 4)
+  assert.equal((grouped[0] as Node).id, 1, 'untagged nodes pass through bare')
+  assert.deepEqual((grouped[1] as Node[]).map((n) => n.id), [2, 3])
+  assert.equal((grouped[2] as Node).id, 4, 'a run of one comes back bare')
+  assert.equal((grouped[3] as Node).id, 5)
+})
+
+test('groupTactics preserves order and never merges separated runs', () => {
+  const kids = [
+    tactic(1, 't1', { groupId: 0 }),
+    tactic(2, 't2', { groupId: 0 }),
+    tactic(3, 't3', { groupId: 1 }),
+    tactic(4, 't4', { groupId: 1 }),
+    tactic(5, 't5', { groupId: 0 }),
+    tactic(6, 't6', { groupId: 0 })
+  ]
+  const grouped = groupTactics(kids)
+  assert.deepEqual(
+    grouped.map((e) => (Array.isArray(e) ? e.map((n) => n.id) : e.id)),
+    [[1, 2], [3, 4], [5, 6]])
+})
+
+test('groupTactics on an empty list is empty', () => {
+  assert.deepEqual(groupTactics([]), [])
 })
