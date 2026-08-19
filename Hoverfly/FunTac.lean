@@ -21,21 +21,22 @@ public structure TacOutput where
   isNoop : Bool
   solvesGoal : Bool
   postState : SavedState
+  error : Option String := none
 
-public def errTacOutput (s : String)
+public def errTacOutput (stx : Syntax) (display : String) (err : String)
   : Elab.TermElabM TacOutput := do
   let postState ← saveState
   return {
-    stx := Syntax.missing
+    stx,
     goals := [],
-    display := s,
+    display,
     isNoop := false,
     solvesGoal := false,
-    postState}
+    postState,
+    error := some err}
 
--- TODO
 public def isErrTacOutput (output : TacOutput) : Bool :=
-  output.goals == [] && !output.solvesGoal
+  output.error.isSome || (output.goals == [] && !output.solvesGoal)
 
 @[expose]
 public def FunTac := TacInput → TermElabM (List TacOutput) -- TODO

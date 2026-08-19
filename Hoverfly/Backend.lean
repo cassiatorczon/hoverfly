@@ -167,12 +167,16 @@ def getApplicableTactics
         let mut tacMap := tacticMap
         for resList in results do
           let mut tacList := []
-          for result@{stx, goals, display, isNoop, solvesGoal, postState} in resList do
-            let tacErr := if isErrTacOutput result then some display else none
+          for result@{stx, goals, display, isNoop, solvesGoal, postState, error} in resList do
+            let tacErr :=
+              if isErrTacOutput result then
+                some (error.getD "tactic left no goals without closing the goal")
+              else none
             let apiNode : APINode :=
               {isGoal := false, id := counter,
                 display := display,
-                tacticError := tacErr, noop := isNoop, solvesGoal := solvesGoal}
+                tacticError := tacErr,
+                noop := isNoop, solvesGoal := solvesGoal}
             tacList := apiNode :: tacList
             tacMap := tacMap.insert counter (result, _params.id)
             counter := counter + 1

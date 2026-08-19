@@ -61,7 +61,7 @@ def runTac (t : Syntax) (mvarId : MVarId) (st : SavedState):
     match newMsgs.find? (fun m => m.severity matches .error) with
     | some err =>
       -- if the tactic "fails softly" (logs an error-severity message), record the error message
-      errTacOutput (← err.data.toString)
+      errTacOutput t t.prettyPrint.pretty (← err.data.toString)
     | none =>
       -- if the tactic doesn't assign or change the goal, mark it noop
       -- if the tactic results in 0 goals and assigns the mvar, mark it as solving the goal
@@ -73,7 +73,7 @@ def runTac (t : Syntax) (mvarId : MVarId) (st : SavedState):
       return {stx:=t, goals, display, isNoop, solvesGoal, postState}
   catch e =>
     -- if the tactic throws, record the error message
-    errTacOutput (← e.toMessageData.toString)
+    errTacOutput t t.prettyPrint.pretty (← e.toMessageData.toString)
 
 
 public def tacticToFunTac
