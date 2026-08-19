@@ -101,9 +101,12 @@ export async function getApplicableTactics(
 
   // get tactic list
   const params = { id: n.id, stateRef: stateRef, pos: pos }
-  const [tactics, newStateRef]: [APINode[], APIData] =
+  const [groups, newStateRef]: [APINode[][], APIData] =
     await rs.call("Backend.getApplicableTactics", params)
-  const tsxTactics = tactics.map(APINodeToNode)
+  const tsxTactics = groups.flatMap((g, i) =>
+    g.map((a) => ({
+      ...APINodeToNode(a), groupId: g.length > 1 ? i : undefined
+    })))
 
   return { node: { ...n, children: tsxTactics }, stateRef: newStateRef }
 }

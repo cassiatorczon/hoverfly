@@ -52,9 +52,9 @@ export function selectedIds(n: Node): number[] {
 /* Mock RPC session */
 
 // `responder(method, id)` returns the children the backend would produce for a
-// call on node `id`: a flat `APINode[]` of tactics for `getApplicableTactics`,
-// or a clustered `APINode[][]` of subgoals for `getSubgoals`.
-export type Responder = (method: string, id: number) => APINode[] | APINode[][]
+// call on node `id`, always grouped one level: `getApplicableTactics` returns one
+// inner list per prototactic, `getSubgoals` one inner list per cluster.
+export type Responder = (method: string, id: number) => APINode[][]
 
 export type MockRpc = {
   // Loosely typed so it can stand in for RpcSessionAtPos in tests.

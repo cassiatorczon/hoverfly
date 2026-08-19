@@ -25,9 +25,9 @@ console.info = () => { }
 //   goal 3  --(rfl: tactic 5)-->  closes (no subgoals)
 const foobarResponder: Responder = (method, id) => {
   if (method === 'Backend.getApplicableTactics') {
-    if (id === 0) return [{ isGoal: false, id: 1, display: 'apply And.intro' }]
-    if (id === 2) return [{ isGoal: false, id: 4, display: 'rfl' }]
-    if (id === 3) return [{ isGoal: false, id: 5, display: 'rfl' }]
+    if (id === 0) return [[{ isGoal: false, id: 1, display: 'apply And.intro' }]]
+    if (id === 2) return [[{ isGoal: false, id: 4, display: 'rfl' }]]
+    if (id === 3) return [[{ isGoal: false, id: 5, display: 'rfl' }]]
     return []
   }
   // Backend.getSubgoals returns clusters (one inner list per cluster). The two
@@ -182,11 +182,11 @@ test('proof completion propagates to the root, including across collapsed ' +
 // goal 3 instead with `exact h7` carries goal 2 as a copy (id 9, originalId 2).
 const transResponder: Responder = (method, id) => {
   if (method === 'Backend.getApplicableTactics') {
-    if (id === 0) return [{ isGoal: false, id: 1, display: 'apply le_trans' }]
-    if (id === 2) return [{ isGoal: false, id: 5, display: 'exact h5' }]
-    if (id === 3) return [{ isGoal: false, id: 8, display: 'exact h7' }]
-    if (id === 6) return [{ isGoal: false, id: 7, display: 'le_refl' }]
-    if (id === 9) return [{ isGoal: false, id: 10, display: 'le_refl' }]
+    if (id === 0) return [[{ isGoal: false, id: 1, display: 'apply le_trans' }]]
+    if (id === 2) return [[{ isGoal: false, id: 5, display: 'exact h5' }]]
+    if (id === 3) return [[{ isGoal: false, id: 8, display: 'exact h7' }]]
+    if (id === 6) return [[{ isGoal: false, id: 7, display: 'le_refl' }]]
+    if (id === 9) return [[{ isGoal: false, id: 10, display: 'le_refl' }]]
     return []
   }
   // Backend.getSubgoals
@@ -313,4 +313,42 @@ test('cluster: flip back to the first driver and finish through its cache',
     await s.click(7)
     assert.equal(display(s.get()).completed, true,
       'proof completes after flipping back to the first driver')
+  })
+
+/* prototactic grouping */
+
+// One prototactic with a single application, and one instantiated at three
+// hypotheses; the backend sends them as two inner lists.
+const groupedResponder: Responder = (method, id) => {
+  if (method === 'Backend.getApplicableTactics' && id === 0) {
+    return [
+      [{ isGoal: false, id: 1, display: 'simp' }],
+      [
+        { isGoal: false, id: 2, display: 'induction a' },
+        { isGoal: false, id: 3, display: 'induction b' },
+        { isGoal: false, id: 4, display: 'induction hab' }
+      ]
+    ]
+  }
+  return []
+}
+
+test('getApplicableTactics flattens prototactic groups into tactic children',
+  async () => {
+    const s = await makeSession(groupedResponder)
+    const kids = s.get().children
+    assert.deepEqual(kids.map((c) => c.id), [1, 2, 3, 4],
+      'grouping is display metadata; the tree stays flat')
+    assert.ok(kids.every((c) => c.kind === 'tactic'))
+  })
+
+test('getApplicableTactics tags only groups with more than one member',
+  async () => {
+    const s = await makeSession(groupedResponder)
+    const byId = (id: number) => findById(s.get(), id)!
+    assert.equal(byId(1).groupId, undefined,
+      'a lone application stays an ordinary sibling')
+    assert.equal(byId(2).groupId, byId(3).groupId)
+    assert.equal(byId(3).groupId, byId(4).groupId)
+    assert.notEqual(byId(2).groupId, undefined)
   })
