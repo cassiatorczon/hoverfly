@@ -18,13 +18,24 @@ def pickNWithRep (xs : List α) (n : Nat) : List (List α) :=
   | .succ n' =>
     xs.flatMap (fun x => (pickNWithRep xs n').map (fun ys => x :: ys))
 
+-- Needed to handle the way `induction` parses its arguments
+partial def countHyps (s : Syntax) : Nat :=
+  if matchesHyp s then 1
+  else s.getArgs.foldl (fun n a => n + countHyps a) 0
+
+partial def replaceHypsCore (xs : List Syntax) (s : Syntax) : Syntax × List Syntax :=
+  match xs, matchesHyp s with
+  | x :: rest, true => (x, rest)
+  | [], true => (s, [])
+  | _, false =>
+    let f := fun (swapped, toSwapIn) arg =>
+      let (arg', toSwapIn') := replaceHypsCore toSwapIn arg
+      (swapped.push arg', toSwapIn')
+    let newArgList := s.getArgs.foldl f ((#[] : Array Syntax), xs)
+    (s.setArgs newArgList.fst, newArgList.snd)
+
 def replaceHyps (xs : List Syntax) (s : Syntax) : Syntax :=
-  let f := fun  (swapped, toSwapIn) arg =>
-    match toSwapIn, matchesHyp arg with
-    | x :: xs', true => (x :: swapped, xs')
-    | _, _ => (arg :: swapped, toSwapIn)
-  let newArgList := s.getArgs.foldl f ([], xs)
-  s.setArgs newArgList.fst.toArray
+  (replaceHypsCore xs s).fst
 
 -- converts a localDecl to a syntax
 def declToSyntax (d : LocalDecl) : Syntax :=
@@ -38,7 +49,7 @@ def getTacsWithArgs (tac : Syntax) (lctx : LocalContext) : List Syntax :=
   let allDecls := lctx.decls.toList.filterMap id -- TODO is there actually no function for that
   let filteredDecls := allDecls.filter (fun d => !d.isAuxDecl && !d.isImplementationDetail)
   let filteredArgs := filteredDecls.map (fun d => declToSyntax d)
-  let numArgs := tac.getArgs.countP matchesHyp
+  let numArgs := countHyps tac
   let argLists := pickNWithRep filteredArgs numArgs
   argLists.map (fun argList => replaceHyps argList tac)
 

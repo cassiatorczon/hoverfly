@@ -14,7 +14,9 @@ add_hoverfly_tactics
     apply Nat.le_trans,
     apply Nat.zero_le,
     apply Nat.sub_add_cancel,
-    rewrite [Nat.two_mul]
+    rewrite [Nat.two_mul],
+    (induction HYP),
+    (cases HYP)
   ]
 
 @[aesop safe]
