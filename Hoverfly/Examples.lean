@@ -1,4 +1,5 @@
-import Hoverfly.Backend
+import Hoverfly
+import Aesop
 
 add_hoverfly_tactics
   [
@@ -22,7 +23,7 @@ add_hoverfly_tactics
 @[aesop safe]
 theorem foo : True := by simp
 
-add_aesop_tactics_to_hoverfly
+-- add_aesop_tactics_to_hoverfly
 
 theorem demo_le_trans (a b c : Nat) (hab : a ≤ b) (hbc : b ≤ c) : a ≤ c := by
   hoverfly
