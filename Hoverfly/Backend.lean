@@ -39,13 +39,12 @@ def getSubgoals
       match tacticMap.get? _params.id with
       | some (tacOutput, parentId) =>
 
-        -- get mvarId and proof state for parent goal of tactic
+        -- check that the parent goal is known
         match goalMap.get? parentId with
-        | some (mvarId, proofState) =>
+        | some _ =>
 
-          -- TODO: necessary?
-          -- restore proof state (including the name generator, see `restoreStateFull`)
-          liftM (restoreStateFull proofState : Lean.Elab.TermElabM Unit)
+          -- restore proof state (including the name generator, see `restoreStateFull`) from the state after running the tactic
+          liftM (restoreStateFull tacOutput.postState : Lean.Elab.TermElabM Unit)
 
           try
             -- run tactic
@@ -61,8 +60,10 @@ def getSubgoals
                 (fun m (mv, i) => m.insert mv i) ∅
             let clusters ← getGoalClusters (result ++ copies.map (·.1))
 
-            -- TODO : did entangled sibling handling change state? should this be saveState?
-            let newProofState := tacOutput.postState
+            -- entangled sibling handling may have touched the state, so save
+            -- the current one rather than reusing `tacOutput.postState`
+            let newProofState ←
+              liftM (saveState : Lean.Elab.TermElabM Lean.Elab.Term.SavedState)
 
             -- add each new goal to map and return nodes and updated counter
             let f t mvarId := match t with
