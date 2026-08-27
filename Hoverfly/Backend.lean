@@ -158,9 +158,18 @@ def getApplicableTactics
       -- get mvarId and proof state for goal
       match goalMap.get? _params.id with
       | some (mvarId, proofState) =>
+
+        -- liftM (restoreStateFull proofState : Lean.Elab.TermElabM Unit) -- TODO maybe we can remove this line
         let tacInput : TacInput := {goal:=mvarId, savedState:=proofState}
-        let results ← allTactics.mapM (fun t => t tacInput)
-        liftM (restoreStateFull proofState : Lean.Elab.TermElabM Unit)
+        let runTac (t : ProtoTactic) : Elab.TermElabM (List TacOutput) := do
+          try
+            restoreStateFull proofState
+            t tacInput
+          catch e => do
+            let errMessage ← e.toMessageData.toString
+            let errTac ← errTacOutput Syntax.missing "Tactic display unavailable." errMessage
+            return [errTac]
+        let results ← allTactics.mapM (fun t => runTac t)
         -- add each new tactic to map and get list of api nodes and updated counter
         let mut tacListList := []
         let mut counter := nodeCounter
