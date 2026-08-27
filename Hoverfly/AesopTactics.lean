@@ -9,7 +9,7 @@ public meta import Lean.Elab.Command
 
 public meta section
 
-open Lean Elab Command Meta FunTac Aesop RuleTac RuleTacDescr RuleTerm
+open Lean Elab Command Meta ProtoTactic Aesop RuleTac RuleTacDescr RuleTerm
 
 def ppRuleTerm (t : RuleTerm) :=
   match t with
@@ -51,7 +51,7 @@ def ppScriptSteps (steps : Option (Array Script.LazyStep)) (default : String)
     return s!"{stepsRun.map (fun (step, _) => step.uTactic)}"
   | none => return default
 
-def ruleTacDescrToFunTac (descr : RuleTacDescr) : FunTac :=
+def ruleTacDescrToProtoTactic (descr : RuleTacDescr) : ProtoTactic :=
   fun {goal, savedState} => do
     let initialState ← saveState
     let _ := liftTermElabM (Util.restoreStateFull savedState) -- TODO?
@@ -101,7 +101,7 @@ elab (name := addAesopTacs)
     let safeRuleDescrs := ruleSet.safeRules.fold (fun rules rule => rule.tac :: rules) []
     let unsafeRuleDescrs := ruleSet.unsafeRules.fold (fun rules rule => rule.tac :: rules) []
     let ruleDescrs := normRuleDescrs ++ safeRuleDescrs ++ unsafeRuleDescrs -- ++ forwardRules
-    let rules := ruleDescrs.map ruleTacDescrToFunTac
+    let rules := ruleDescrs.map ruleTacDescrToProtoTactic
     rules.forM (fun tac => modifyEnv fun env => hoverflyTacticExt.addEntry env tac)
 
 initialize Batteries.Linter.UnreachableTactic.addIgnoreTacticKind ``addAesopTacs

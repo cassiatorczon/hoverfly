@@ -7,7 +7,7 @@ public meta import Lean.Elab.Command
 
 public meta section
 
-open Lean Elab Command TacticUtil FunTac State
+open Lean Elab Command TacticUtil ProtoTactic State
 
 -- TODO: this lets us add lemmas, not tactics
 
@@ -29,13 +29,13 @@ initialize registerBuiltinAttribute {
 }
 
 initialize hoverflyTacticExt : SimplePersistentEnvExtension
-  FunTac (Array FunTac) ←
+  ProtoTactic (Array ProtoTactic) ←
   registerSimplePersistentEnvExtension {
     addEntryFn := Array.push
     addImportedFn := fun ess => ess.flatten
   }
 
-def hoverflyTactics (env : Environment) : Array FunTac :=
+def hoverflyTactics (env : Environment) : Array ProtoTactic :=
   hoverflyTacticExt.getState env
 
 syntax tac_list := "[" tactic,+,? "]"
@@ -55,7 +55,7 @@ open Lean.Elab.Command in
 elab (name := addTacs)
     "add_hoverfly_tactics " e:tac_list : command => do
   let tacArrayStx ← liftTermElabM (TacList.elab e)
-  let tacArray := tacArrayStx.map (fun stx => tacticToFunTac stx.raw)
+  let tacArray := tacArrayStx.map (fun stx => tacticToProtoTactic stx.raw)
   tacArray.forM (fun tac => modifyEnv fun env => hoverflyTacticExt.addEntry env tac)
 
 initialize Batteries.Linter.UnreachableTactic.addIgnoreTacticKind ``addTacs

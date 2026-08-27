@@ -4,7 +4,7 @@ import Hoverfly.Attribute
 namespace Backend
 open Lean Lean.Meta Lean.Elab.Tactic
 open ProofWidgets Server
-open State MVar FunTac Util TacticUtil
+open State MVar ProtoTactic Util TacticUtil
 
 structure APINode where
   isGoal : Bool
@@ -161,7 +161,6 @@ def getApplicableTactics
         let tacInput : TacInput := {goal:=mvarId, savedState:=proofState}
         let results ← allTactics.mapM (fun t => t tacInput)
         liftM (restoreStateFull proofState : Lean.Elab.TermElabM Unit)
-
         -- add each new tactic to map and get list of api nodes and updated counter
         let mut tacListList := []
         let mut counter := nodeCounter
@@ -228,7 +227,7 @@ elab stx:"hoverfly" : tactic => do
   -- initialize state
   let initialState : State.State := {
       allTactics := tacs ++
-        (lemmaApps.toList.map (fun t => tacticToFunTac t.raw)) -- TODO, we need the rest
+        (lemmaApps.toList.map (fun t => tacticToProtoTactic t.raw)) -- TODO, we need the rest
       nodeCounter := rootGoal.id + 1,
       goalMap := initialGoalMap,
       tacticMap := ∅

@@ -4,7 +4,7 @@ public import Hoverfly.MVar
 public import Hoverfly.Util
 public import Lean.Elab
 
-open Lean Elab Term FunTac Util
+open Lean Elab Term ProtoTactic Util
 
 namespace TacticUtil
 
@@ -87,9 +87,9 @@ def runTac (t : Syntax) (mvarId : MVarId) (st : SavedState):
     errTacOutput t t.prettyPrint.pretty (← e.toMessageData.toString)
 
 
-public def tacticToFunTac
+public def tacticToProtoTactic
   (tac : Syntax) -- prototactic
-  : FunTac :=
+  : ProtoTactic :=
   fun {goal, savedState} => do
     liftM (restoreStateFull savedState : Lean.Elab.TermElabM Unit)
     let tacs := getTacsWithArgs tac (← liftM (goal.getDecl : Elab.TermElabM _)).lctx

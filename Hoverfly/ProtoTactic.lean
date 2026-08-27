@@ -4,7 +4,7 @@ public import Lean.Elab
 
 open Lean Elab Term
 
-namespace FunTac
+namespace ProtoTactic
 
 /-- Input for a tactic. -/
 public structure TacInput where
@@ -39,6 +39,6 @@ public def isErrTacOutput (output : TacOutput) : Bool :=
   output.error.isSome --|| (output.goals == [] && !output.solvesGoal) TODO I think we don't need this part
 
 @[expose]
-public def FunTac := TacInput → TermElabM (List TacOutput)
+public def ProtoTactic := TacInput → TermElabM (List TacOutput)
 
-end FunTac
+end ProtoTactic

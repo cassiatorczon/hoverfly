@@ -1,11 +1,11 @@
 module
 
-public import Hoverfly.FunTac
+public import Hoverfly.ProtoTactic
 public import Lean.Data.Json.FromToJson.Basic
 public import Lean.Elab.Term.TermElabM
 public import Std.Data.HashMap.Basic
 
-open Lean Elab FunTac
+open Lean Elab ProtoTactic
 
 namespace State
 
@@ -37,7 +37,7 @@ public structure ClusterInfo where
 
 public structure State where
   /- all proto-tactics available to the widget -/
-  allTactics : List FunTac
+  allTactics : List ProtoTactic
   /- the number of nodes so far and also the ID for the next node to be created -/
   nodeCounter : StateId := 0
   /- a map of state IDs to their corresponding goals and proof states at those goals -/
