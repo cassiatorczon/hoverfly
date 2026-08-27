@@ -90,7 +90,7 @@ public def carriedSiblings
       match goalMap.get? sid with
       | none => return none
       | some (smv, _) =>
-        -- TODO: can any of them be assigned in this context?
+        -- TODO: is it possible for any of them to be assigned in this context?
         if ← smv.isAssigned then return none else return some (smv, sid)
 
 end MVar
