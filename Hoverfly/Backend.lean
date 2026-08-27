@@ -158,7 +158,6 @@ def getApplicableTactics
       -- get mvarId and proof state for goal
       match goalMap.get? _params.id with
       | some (mvarId, proofState) =>
-
         -- liftM (restoreStateFull proofState : Lean.Elab.TermElabM Unit) -- TODO maybe we can remove this line
         let tacInput : TacInput := {goal:=mvarId, savedState:=proofState}
         let runTac (t : ProtoTactic) : Elab.TermElabM (List TacOutput) := do
