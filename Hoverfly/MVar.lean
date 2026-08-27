@@ -71,8 +71,9 @@ public def dropMVarGoals (goals : List MVarId) : MetaM (List MVarId) :=
     return !(← others.anyM fun g' => do return (← unassignedDeps g').contains g)
 
 /-
-For a given goal (`parentId`), if the goal is assigned a value, get a list of
-all its unassigned cluster-siblings and their corresponding states.
+For a given goal (with corresponding state given by `parentId`), if the goal
+is assigned a value, get a list of all its unassigned cluster-siblings and
+their corresponding states.
 -/
 public def carriedSiblings
     (clusterMap : Std.HashMap StateId ClusterInfo)
