@@ -235,7 +235,7 @@ elab stx:"hoverfly" : tactic => do
   -- initialize state
   let initialState : State.State := {
       allTactics := tacs ++
-        (lemmaApps.toList.map (fun t => tacticToProtoTactic t.raw)) -- TODO, we need the rest
+        (lemmaApps.toList.map (fun t => syntaxToProtoTactic t.raw)) -- TODO, we need the rest
       nodeCounter := rootGoal.id + 1,
       goalMap := initialGoalMap,
       tacticMap := ∅

@@ -30,26 +30,6 @@ TODO the else case of this seems to cause the bug
 -/
 def countHyps (s : Syntax) : Nat := countSyntax matchesHyp s
 
--- /-
--- TODO this is partial because we don't want to prove it not actually partial, right?
--- -/
--- def replaceHypsCore (xs : List Syntax) (s : Syntax) : Syntax × List Syntax :=
---   match xs, matchesHyp s with
---   | x :: rest, true =>
---      -- if s is itself a placeholder and we have args to swap in, swap it
---     (x, rest)
---   | [], true =>
---     -- if there are no more args to swap in, leave s unchanged (TODO: why must matchesHyp s be true)
---     (s, [])
---   | _, false =>
---     -- if s is not itself a placeholder, traverse its args in left-right order
---     let f := fun (swapped, toSwapIn) arg =>
---       let (arg', toSwapIn') := replaceHypsCore toSwapIn arg
---       (swapped.push arg', toSwapIn')
---     let newArgList := s.getArgs.foldl f ((#[] : Array Syntax), xs)
---     (s.setArgs newArgList.fst, newArgList.snd)
--- decreasing_by sorry
-
 /-
 Replace each instance of an argument placeholder in a piece of syntax s with
 the pieces of syntax xs, in depth-first order.

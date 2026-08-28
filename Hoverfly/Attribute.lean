@@ -55,7 +55,7 @@ open Lean.Elab.Command in
 elab (name := addTacs)
     "add_hoverfly_tactics " e:tac_list : command => do
   let tacArrayStx ← liftTermElabM (TacList.elab e)
-  let tacArray := tacArrayStx.map (fun stx => tacticToProtoTactic stx.raw)
+  let tacArray := tacArrayStx.map (fun stx => syntaxToProtoTactic stx.raw)
   tacArray.forM (fun tac => modifyEnv fun env => hoverflyTacticExt.addEntry env tac)
 
 initialize Batteries.Linter.UnreachableTactic.addIgnoreTacticKind ``addTacs
