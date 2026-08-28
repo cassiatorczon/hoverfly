@@ -61,8 +61,13 @@ def localDeclToSyntax (d : LocalDecl) : Syntax :=
   let rawVal := d.userName.toString.toRawSubstring
   .ident SourceInfo.none rawVal val preresolved
 
-def getTacsWithArgs (tac : Syntax) (lctx : LocalContext) : List Syntax :=
-    -- let lctx ← liftM (Lean.LocalContext.sanitizeNames lctx : Elab.TermElabM LocalContext)
+/-
+Replaces placeholder arguments in the given tactic with all (syntactically)
+possible combinations of (non-auxiliary) declarations in the context,
+including combinations with repetition of a single declaration.
+-/
+def instantiateArgs (tac : Syntax) (lctx : LocalContext) : List Syntax :=
+  -- TODO do we want to sanitize names? -- let lctx ← liftM (Lean.LocalContext.sanitizeNames lctx : Elab.TermElabM LocalContext)
   let allDecls := lctx.decls.toList.filterMap id -- TODO is there actually no function for that
   let filteredDecls := allDecls.filter (fun d => !d.isAuxDecl && !d.isImplementationDetail)
   let filteredArgs := filteredDecls.map (fun d => localDeclToSyntax d)
@@ -109,7 +114,7 @@ public def syntaxToProtoTactic
   : ProtoTactic :=
   fun {goal, savedState} => do
     liftM (restoreStateFull savedState : Lean.Elab.TermElabM Unit)
-    let tacs := getTacsWithArgs tac (← liftM (goal.getDecl : Elab.TermElabM _)).lctx
+    let tacs := instantiateArgs tac (← liftM (goal.getDecl : Elab.TermElabM _)).lctx
     tacs.mapM (fun t => runTac t goal savedState)
 
 end TacticUtil
