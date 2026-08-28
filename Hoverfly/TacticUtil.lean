@@ -3,52 +3,89 @@ module
 public import Hoverfly.MVar
 public import Hoverfly.Util
 public import Lean.Elab
+public import Hoverfly.SyntaxUtil
 
-open Lean Elab Term ProtoTactic Util
+open Lean Elab Term ProtoTactic Util SyntaxUtil
 
 namespace TacticUtil
 
+/-
+Checks if a piece of syntax is the prototactic argument placeholder.
+-/
 def matchesHyp (i : Syntax) : Bool :=
   Syntax.matchesIdent i (.str .anonymous "HYP")
 
--- gets all lists of length n composed from elements of xs, with repetition
+/-
+Returns all lists of length n composed from elements of xs, with repetition.
+-/
 def pickNWithRep (xs : List α) (n : Nat) : List (List α) :=
   match n with
   | 0 => [[]]
   | .succ n' =>
     xs.flatMap (fun x => (pickNWithRep xs n').map (fun ys => x :: ys))
 
--- Needed to handle the way `induction` parses its arguments
-partial def countHyps (s : Syntax) : Nat :=
-  if matchesHyp s then 1
-  else s.getArgs.foldl (fun n a => n + countHyps a) 0
+/-
+Count instances of argument placeholders in a piece of syntax.
+TODO the else case of this seems to cause the bug
+-/
+def countHyps (s : Syntax) : Nat := countSyntax matchesHyp s
 
-partial def replaceHypsCore (xs : List Syntax) (s : Syntax) : Syntax × List Syntax :=
-  match xs, matchesHyp s with
-  | x :: rest, true => (x, rest)
-  | [], true => (s, [])
-  | _, false =>
-    let f := fun (swapped, toSwapIn) arg =>
-      let (arg', toSwapIn') := replaceHypsCore toSwapIn arg
-      (swapped.push arg', toSwapIn')
-    let newArgList := s.getArgs.foldl f ((#[] : Array Syntax), xs)
-    (s.setArgs newArgList.fst, newArgList.snd)
+-- /-
+-- TODO this is partial because we don't want to prove it not actually partial, right?
+-- -/
+-- def replaceHypsCore (xs : List Syntax) (s : Syntax) : Syntax × List Syntax :=
+--   match xs, matchesHyp s with
+--   | x :: rest, true =>
+--      -- if s is itself a placeholder and we have args to swap in, swap it
+--     (x, rest)
+--   | [], true =>
+--     -- if there are no more args to swap in, leave s unchanged (TODO: why must matchesHyp s be true)
+--     (s, [])
+--   | _, false =>
+--     -- if s is not itself a placeholder, traverse its args in left-right order
+--     let f := fun (swapped, toSwapIn) arg =>
+--       let (arg', toSwapIn') := replaceHypsCore toSwapIn arg
+--       (swapped.push arg', toSwapIn')
+--     let newArgList := s.getArgs.foldl f ((#[] : Array Syntax), xs)
+--     (s.setArgs newArgList.fst, newArgList.snd)
+-- decreasing_by sorry
 
+/-
+Replace each instance of an argument placeholder in a piece of syntax s with
+the pieces of syntax xs, in depth-first order.
+
+If xs has more elements than s has placeholders, the extra elements will be
+ignored.
+If xs has fewer elements than s has placeholders, the extra placeholders will
+remain unchanged.
+-/
 def replaceHyps (xs : List Syntax) (s : Syntax) : Syntax :=
-  (replaceHypsCore xs s).fst
+  let f : Array Syntax → Syntax → StateM (List Syntax) Syntax := fun acc s => do
+    let toSwap ← get
+    match toSwap, matchesHyp s with
+    | _, false => return s.setArgs acc
+    | [], _ => return s
+    | x :: xs', true => do
+      set xs'
+      return x
+  ((foldMSyntax' f s).run xs).fst
 
--- converts a localDecl to a syntax
-def declToSyntax (d : LocalDecl) : Syntax :=
+/-
+Converts a LocalDecl to a Syntax.
+TODO it seems like there should be a function for this. I'm not sure
+this is the right way to do it.
+-/
+def localDeclToSyntax (d : LocalDecl) : Syntax :=
   let val := d.userName
-  let preresolved := [] -- TODO
-  let rawVal := d.userName.toString.toRawSubstring -- TODO
+  let preresolved := []
+  let rawVal := d.userName.toString.toRawSubstring
   .ident SourceInfo.none rawVal val preresolved
 
 def getTacsWithArgs (tac : Syntax) (lctx : LocalContext) : List Syntax :=
     -- let lctx ← liftM (Lean.LocalContext.sanitizeNames lctx : Elab.TermElabM LocalContext)
   let allDecls := lctx.decls.toList.filterMap id -- TODO is there actually no function for that
   let filteredDecls := allDecls.filter (fun d => !d.isAuxDecl && !d.isImplementationDetail)
-  let filteredArgs := filteredDecls.map (fun d => declToSyntax d)
+  let filteredArgs := filteredDecls.map (fun d => localDeclToSyntax d)
   let numArgs := countHyps tac
   let argLists := pickNWithRep filteredArgs numArgs
   argLists.map (fun argList => replaceHyps argList tac)
@@ -87,7 +124,7 @@ def runTac (t : Syntax) (mvarId : MVarId) (st : SavedState):
     errTacOutput t t.prettyPrint.pretty (← e.toMessageData.toString)
 
 
-public def tacticToProtoTactic
+public def syntaxToProtoTactic
   (tac : Syntax) -- prototactic
   : ProtoTactic :=
   fun {goal, savedState} => do
