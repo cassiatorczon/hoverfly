@@ -55,6 +55,9 @@ public def getGoalClusters (goals : List MVarId) : MetaM (List (List MVarId)) :=
 /-
 Get the corresponding list of mvars for a cluster of goals.
 TODO why is this a separate function rather than just returning a pair in getGoalClusters
+HG: We could return this in `getGoalClusters`, but we'd still need to compute
+it separately, since the `groups` we compute up there includes mvars that are
+not shared as well. But I don't think that'd be bad.
 -/
 public def sharedMVars (goals : List MVarId) : MetaM (List MVarId) := do
   let deps ← goals.mapM unassignedDeps
@@ -84,6 +87,9 @@ public def carriedSiblings
   | some ⟨members, sharedMVars⟩ =>
     -- if no mvars in the cluster have been assigned, no copying is needed
     -- TODO: why aren't we just checking if parentID is assigned?
+    -- HG: I think this is the difference between basically always copying
+    -- siblings down and only copying them when the actual shared mvar is
+    -- assigned. We can probably do either? But this one does less copying.
     if !(← sharedMVars.anyM (·.isAssigned)) then
       return []
     let siblingIds := members.filter (· != parentId)
@@ -92,6 +98,9 @@ public def carriedSiblings
       | none => return none
       | some (smv, _) =>
         -- TODO: is it possible for any of them to be assigned in this context?
+        -- HG: I think probably not, but you can construct a pathological
+        -- test case (see ClusterTests.lean:186). I don't think it hurts to
+        -- check?
         if ← smv.isAssigned then return none else return some (smv, sid)
 
 end MVar
