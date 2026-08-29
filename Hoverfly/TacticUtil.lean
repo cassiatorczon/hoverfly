@@ -115,6 +115,10 @@ public def syntaxToProtoTactic
   fun {goal, savedState} => do
     liftM (restoreStateFull savedState : Lean.Elab.TermElabM Unit)
     let tacs := instantiateArgs tac (← liftM (goal.getDecl : Elab.TermElabM _)).lctx
-    tacs.mapM (fun t => runTac t goal savedState)
+    -- The `MonadExcept` instance for `TermElabM` rethrows timeouts, so we need to catch it again
+    tacs.mapM fun t =>
+      tryCatchRuntimeEx (runTac t goal savedState) fun e => do
+        liftM (restoreStateFull savedState : Lean.Elab.TermElabM Unit)
+        errTacOutput t t.prettyPrint.pretty (← e.toMessageData.toString)
 
 end TacticUtil

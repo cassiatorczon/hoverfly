@@ -7,7 +7,7 @@ add_hoverfly_tactics
     contradiction,
     intro,
     rfl,
-    -- subst_eqs,
+    subst_eqs,
     rewrite [Eq.comm],
     rewrite [Nat.add_zero],
     rewrite [Nat.add_succ],
