@@ -1,65 +1,107 @@
 module
 
 public meta import Aesop.Frontend.Extension
-public meta import Lean.Elab.Command
-import Aesop
+public meta import Aesop.RuleTac
 import Batteries.Linter.UnreachableTactic
 public import Hoverfly.Attribute
+public meta import Hoverfly.Util
+public meta import Lean.Elab.Command
 
 public meta section
 
-open Lean Elab Command Meta
+open Lean Elab Command Meta ProtoTactic Aesop RuleTac RuleTacDescr RuleTerm
 
-def foobar : (TSyntax `tactic) := {raw:=Syntax.atom SourceInfo.none "need to implement this"}
+def ppRuleTerm (t : RuleTerm) :=
+  match t with
+  | .const decl => s!"{decl}"
+  | .term t => s!"{t}"
 
-def addMode (stxM : CommandElabM (TSyntax `tactic)) (md : Meta.TransparencyMode) :
-  CommandElabM (TSyntax `tactic) := do
-  let stx ← stxM
-  match md with
-  | .all => `(tactic| with_unfolding_all $stx:tactic)
-  | .default => return stx
-  | .reducible =>
-    `(tactic| with_reducible $stx:tactic)
-  | .instances =>
-    `(tactic| with_reducible_and_instances $stx:tactic)
-  | .none => `(tactic| with_unfolding_none $stx:tactic)
+-- TODO
+def ForwardRuleMatch.toString : ForwardRuleMatch → String :=
+  fun m => s!"{m.rule.name}"
 
-open Aesop RuleTacDescr RuleTerm in
-def ruleTacDescrToStx (descr : RuleTacDescr) : CommandElabM (Option (TSyntax `tactic)) :=
+instance : ToString ForwardRuleMatch :=
+  ⟨ForwardRuleMatch.toString⟩
+
+-- TODO
+def ppRuleTacDescr (descr : RuleTacDescr) : String :=
   match descr with
-  | apply t md =>
-    match t with
-      | const decl =>
-        addMode (`(tactic | apply $(mkIdent decl):ident)) md
-      | term tm =>
-        addMode (`(tactic | apply $tm:term)) md
-  | constructors (constructorNames : Array Name) md =>
-    return foobar--none --TODO
-  | forward (t : RuleTerm) (immediate : UnorderedArraySet PremiseIndex)
-      (isDestruct : Bool) => return foobar--none --TODO
-  | cases (target : CasesTarget) md
-      (isRecursiveType : Bool) (ctorNames : Array CtorNames) => return foobar--none --TODO
-  | tacticM (decl : Name) => return foobar--none --TODO
-  | ruleTac (decl : Name) => return foobar--none --TODO
-  | tacGen (decl : Name) => return foobar--none --TODO
-  | singleRuleTac (decl : Name) => return foobar--none --TODO
-  | tacticStx (stx : Syntax) => return (some {raw:=stx})
-  | preprocess => return foobar--none --TODO
-  | forwardMatches (ms : Array ForwardRuleMatch) => return foobar--none --TODO
+  | .apply t md =>
+    "apply " ++ ppRuleTerm t
+  | .constructors constructorNames md =>
+    "constructor"
+  | .forward t immediate isDestruct =>
+    "forward " ++ ppRuleTerm t
+  | .cases target md isRecursivetype ctorNames =>
+    "cases " -- ++ s!"{target}"
+  | .tacticM decl => s!"{decl}"
+  | .ruleTac decl => s!"{decl}"
+  | .tacGen decl => s!"{decl}"
+  | .singleRuleTac decl => s!"{decl}"
+  | .tacticStx stx => s!"{stx}"
+  | .preprocess => "preprocess" -- TODO
+  | .forwardMatches ms =>
+    "forwardMatches " ++ s!"{ms.toList.toString}"
 
-open Aesop Aesop.Frontend in
-open Lean.Elab.Command in
+def ppScriptSteps (steps : Option (Array Script.LazyStep)) (default : String)
+  : CoreM String :=
+  match steps with
+  | some steps => do
+    let stepsRun ← steps.mapM (fun s => s.toStep.run)
+    return s!"{stepsRun.map (fun (step, _) => step.uTactic)}"
+  | none => return default
+
+def ruleTacDescrToProtoTactic (descr : RuleTacDescr) : ProtoTactic :=
+  fun {goal, savedState} => do
+    let initialState ← saveState
+    let _ := liftTermElabM (Util.restoreStateFull savedState) -- TODO?
+    let ruleTac := descr.run
+    let mvarDeps ← liftM (goal.getMVarDependencies : MetaM (Std.HashSet MVarId))
+    let mvars := UnorderedArraySet.ofHashSet mvarDeps
+    let indexMatchLocations : Array IndexMatchLocation := #[] -- TODO
+    let patternSubsts? : Option (Array Substitution ):= none -- TODO
+    let options : Options' :=
+      {generateScript := true, forwardMaxDepth? := none}
+    let ruleTacInput : RuleTacInput :=
+      {goal, mvars, indexMatchLocations, patternSubsts?, options}
+    try do
+      let ({applications}, _) ← (ruleTac ruleTacInput).run
+      let appsList := applications.toList
+      let f (tacOutputs : List TacOutput) (ruleApp : RuleApplication)
+        : TermElabM (List TacOutput) := do
+        let _ := liftTermElabM (Util.restoreStateFull savedState) -- TODO?
+        let {goals, postState, scriptSteps?, successProbability?} := ruleApp
+        let termState : Term.State := ← get -- TODO
+        let newState : Term.SavedState := { «meta» := postState, «elab» := termState}
+        let goalList := goals.toList.map (fun g => g.mvarId)
+        let display ← ppScriptSteps scriptSteps? (ppRuleTacDescr descr)
+        let assigned ← goal.isAssigned
+        let isNoop := goalList == [goal] && !assigned
+        let solvesGoal := goalList == [] && assigned
+        let stx := Syntax.missing -- TODO
+        let tac : TacOutput :=
+          {stx, goals:=goalList, display, isNoop, solvesGoal, postState:=newState}
+        return (tac :: tacOutputs)
+      let _ := liftTermElabM (Util.restoreStateFull initialState) -- TODO?
+      List.foldlM f [] appsList
+    catch e =>
+      let display := ppRuleTacDescr descr
+      let errString ← e.toMessageData.toString
+      let errTac ← errTacOutput Syntax.missing display errString
+      return [errTac]
+
+
 elab (name := addAesopTacs)
     -- attrKind:attrKind
     "add_aesop_tactics_to_hoverfly ": command => do
-  let aesopRuleSets ← liftCoreM getDeclaredGlobalRuleSets
-  for (setName, ruleSet, simpExtName, simprocExtName) in aesopRuleSets do
+  let aesopRuleSets ← liftCoreM Aesop.Frontend.getDeclaredGlobalRuleSets
+  for (_, ruleSet, _, _) in aesopRuleSets do
     -- let forwardRules := (ruleSet.forwardRules.nameToRule.toList.map Prod.snd).map TODO
     let normRuleDescrs := ruleSet.normRules.fold (fun rules rule => rule.tac :: rules) []
     let safeRuleDescrs := ruleSet.safeRules.fold (fun rules rule => rule.tac :: rules) []
     let unsafeRuleDescrs := ruleSet.unsafeRules.fold (fun rules rule => rule.tac :: rules) []
-    let ruleDescrs := normRuleDescrs ++ safeRuleDescrs ++ unsafeRuleDescrs
-    let rules ← ruleDescrs.filterMapM ruleTacDescrToStx
-    rules.forM (fun tac => modifyEnv fun env => hoverflyTacticExt.addEntry env {raw:=tac})
+    let ruleDescrs := normRuleDescrs ++ safeRuleDescrs ++ unsafeRuleDescrs -- ++ forwardRules
+    let rules := ruleDescrs.map ruleTacDescrToProtoTactic
+    rules.forM (fun tac => modifyEnv fun env => hoverflyTacticExt.addEntry env tac)
 
 initialize Batteries.Linter.UnreachableTactic.addIgnoreTacticKind ``addAesopTacs

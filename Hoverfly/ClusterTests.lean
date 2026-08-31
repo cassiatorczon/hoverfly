@@ -6,7 +6,7 @@ import Hoverfly.Backend
 This file is not imported by the library; run `lake build Hoverfly/ClusterTests.lean` to run.
 -/
 
-open Lean Lean.Meta Lean.Elab.Command Backend
+open Lean Lean.Meta Lean.Elab.Command Backend MVar State
 
 namespace Backend.ClusterTests
 

@@ -1,25 +1,10 @@
 import ProofWidgets
-
 import Hoverfly.Attribute
-import Hoverfly.AesopTactics
 
 namespace Backend
-open Lean ProofWidgets Server Lean.Meta Lean.Elab.Tactic
-
-def StateId := Nat
-  deriving OfNat, BEq, Hashable, ToJson, FromJson, HAdd, ToString
-
-structure ClusterInfo where
-  members : List StateId
-  sharedMVars : List MVarId
-
-structure State where
-  allTactics : List (TSyntax `tactic)
-  nodeCounter : StateId := 0
-  goalMap : Std.HashMap StateId (MVarId × Elab.Term.SavedState) := ∅
-  tacticMap : Std.HashMap StateId (Syntax × StateId) := ∅
-  clusterMap : Std.HashMap StateId ClusterInfo := ∅
-  deriving TypeName
+open Lean Lean.Meta Lean.Elab.Tactic
+open ProofWidgets Server
+open State MVar ProtoTactic Util TacticUtil
 
 structure APINode where
   isGoal : Bool
@@ -35,80 +20,10 @@ structure APINode where
 
 structure GetSubgoalsParams where
   id : StateId
-  stateRef : WithRpcRef State
+  stateRef : WithRpcRef State.State
   pos : Lsp.Position
   deriving RpcEncodable
 
-def getGoalClusters (goals : List MVarId) : MetaM (List (List MVarId)) := do
-  let mvarGoalLists ← goals.mapM (fun g => do
-    let mvs ← g.getMVarDependencies
-    let unassigned ← mvs.toList.filterM fun m => do return !(← m.isAssigned)
-    return (g, unassigned))
-  let mvarLists := mvarGoalLists.map (fun (_,x) => x)
-  let f clustersSoFar mvs : List (List MVarId) :=
-    let g acc mv : List (List MVarId) :=
-      let (withMv, withoutMv) := acc.partition (fun l => l.contains mv)
-      withMv.flatten.eraseDups :: withoutMv
-    List.foldl g clustersSoFar mvs
-  let clusters : List (List MVarId) := List.foldl f mvarLists mvarLists
-  let grouped := clusters.filterMap fun cl =>
-    let gs := (mvarGoalLists.filter fun (_, mvs) => mvs.any cl.contains).map (·.1)
-    if gs.isEmpty then none else some gs
-  let touched := grouped.flatten
-  let singles :=
-    (mvarGoalLists.filter fun (g, _) => !touched.contains g).map (fun (g, _) => [g])
-  return grouped ++ singles
-
-def unassignedDeps (g : MVarId) : MetaM (List MVarId) := do
-  let deps ← g.getMVarDependencies
-  deps.toList.filterM fun m => do return !(← m.isAssigned)
-
-def sharedMVars (goals : List MVarId) : MetaM (List MVarId) := do
-  let deps ← goals.mapM unassignedDeps
-  let occursInTwo m := (deps.filter (·.contains m)).length ≥ 2
-  return deps.flatten.eraseDups.filter occursInTwo
-
-def dropMVarGoals (goals : List MVarId) : MetaM (List MVarId) :=
-  goals.filterM fun g => do
-    let others := goals.filter (· != g)
-    return !(← others.anyM fun g' => do return (← unassignedDeps g').contains g)
-
-def carriedSiblings
-    (clusterMap : Std.HashMap StateId ClusterInfo)
-    (goalMap : Std.HashMap StateId (MVarId × Elab.Term.SavedState))
-    (parentId : StateId) : MetaM (List (MVarId × StateId)) := do
-  match clusterMap.get? parentId with
-  | none => return []
-  | some ⟨members, sharedMVars⟩ =>
-    if !(← sharedMVars.anyM (·.isAssigned)) then
-      return []
-    let siblingIds := members.filter (· != parentId)
-    siblingIds.filterMapM fun sid => do
-      match goalMap.get? sid with
-      | none => return none
-      | some (smv, _) =>
-        if ← smv.isAssigned then return none else return some (smv, sid)
-
-/--
-Like `restoreState`, but *also* rewinds the name generator (and the macro-scope and
-auxiliary-declaration generators) to the values captured in `s`.
-
-`Core.SavedState.restore` deliberately restores only `env`/`messages`/`infoState` and
-leaves `ngen` alone, because within a single elaboration thread the name generator only
-ever moves forward, so it must not be rolled back. That assumption breaks for us: every
-RPC request runs in a *fresh* `RequestM.runTermElabM` seeded from the `hoverfly`
-snapshot's command state, so `ngen` is reset to the snapshot value on each call. Plain
-`restoreState` then leaves `ngen` pointing *before* the `FVarId`/`MVarId`s that were
-allocated (in a previous request) and baked into `s`'s metavariable context. The next
-tactic re-issues those exact ids, clobbering the goal mvar and hypotheses in the restored
-context — which surfaces as nonsense like `function expected ?α`. Restoring `ngen` makes
-fresh allocations continue *past* everything already in `s`. -/
-def restoreStateFull (s : Lean.Elab.Term.SavedState) : Lean.Elab.TermElabM Unit := do
-  restoreState s
-  modifyThe Core.State fun st => { st with
-    ngen           := s.meta.core.ngen
-    nextMacroScope := s.meta.core.nextMacroScope
-    auxDeclNGen    := s.meta.core.auxDeclNGen }
 
 /-- Run tactic `stx` against goal `mvarId`. Same as `run mvarId (evalTactic stx)`, except that
 Lean's runtime exceptions are rethrown as ordinary ones.
@@ -124,7 +39,7 @@ def runTacticSafely (mvarId : MVarId) (stx : Syntax) : Lean.Elab.TermElabM (List
 @[server_rpc_method]
 def getSubgoals
   (_params : GetSubgoalsParams)
-  : RequestM (RequestTask ((List (List APINode)) × WithRpcRef State)) :=
+  : RequestM (RequestTask ((List (List APINode)) × WithRpcRef State.State)) :=
   RequestM.withWaitFindSnapAtPos _params.pos fun snap => do
     RequestM.runTermElabM snap do
       -- get counter and maps
@@ -133,21 +48,21 @@ def getSubgoals
 
       -- get syntax and id of parent goal for tactic
       match tacticMap.get? _params.id with
-      | some (stx, parentId) =>
+      | some (tacOutput, parentId) =>
 
-        -- get mvarId and proof state for parent goal of tactic
+        -- check that the parent goal is known
         match goalMap.get? parentId with
-        | some (mvarId, proofState) =>
+        | some _ =>
 
-          -- restore proof state (including the name generator, see `restoreStateFull`)
-          liftM (restoreStateFull proofState : Lean.Elab.TermElabM Unit)
+          -- restore proof state (including the name generator, see `restoreStateFull`) from the state after running the tactic
+          liftM (restoreStateFull tacOutput.postState : Lean.Elab.TermElabM Unit)
 
           try
             -- run tactic
-            let rawResult : List Lean.MVarId ←
-              liftM (runTacticSafely mvarId stx : Lean.Elab.TermElabM _)
+            let rawResult := tacOutput.goals
             let result ← dropMVarGoals rawResult
 
+            -- copy entangled siblings
             let copies ← carriedSiblings clusterMap goalMap parentId
             let copyOf : Std.HashMap MVarId StateId :=
               copies.foldl (fun m (smv, sid) => m.insert smv sid) ∅
@@ -156,9 +71,12 @@ def getSubgoals
                 (fun m (mv, i) => m.insert mv i) ∅
             let clusters ← getGoalClusters (result ++ copies.map (·.1))
 
-            -- add each new goal to map and return nodes and updated counter
+            -- entangled sibling handling may have touched the state, so save
+            -- the current one rather than reusing `tacOutput.postState`
             let newProofState ←
               liftM (saveState : Lean.Elab.TermElabM Lean.Elab.Term.SavedState)
+
+            -- add each new goal to map and return nodes and updated counter
             let f t mvarId := match t with
               | (nodes, tempGoalMap, c) => do
                 let goalPretty ← (ppGoal mvarId)
@@ -202,7 +120,7 @@ def getSubgoals
             -- uncaught JSON-RPC error (which shows up as "Uncaught (in promise)").
             let errNode : APINode := {
               isGoal := true, id := nodeCounter,
-              display := s!"tactic '{stx.prettyPrint.pretty}' failed:\n\
+              display := s!"tactic '{tacOutput.stx.prettyPrint.pretty}' failed:\n\
                 {← e.toMessageData.toString}"
             }
             pure ([[errNode]], _params.stateRef)
@@ -225,10 +143,9 @@ def getSubgoals
 
 structure GetApplicableTacticsParams where
   id : StateId
-  stateRef : WithRpcRef State
+  stateRef : WithRpcRef State.State
   pos : Lsp.Position
   deriving RpcEncodable
-
 
 -- TODO
 def nameToString (n : Name) : String :=
@@ -238,24 +155,11 @@ def nameToString (n : Name) : String :=
   -- | .num p i => p.toString
   -- | _ => "?"
 
--- TODO
-open Syntax in
-private def argTactics : List (Name → CoreM (Syntax × String)) :=
-  [
-    fun x => do return ((← `(tactic| induction $(mkIdent x):ident)).raw, "induction " ++ nameToString x),
-    fun x => do return ((← `(tactic| cases $(mkIdent x):ident)).raw, "cases " ++ nameToString x),
-    fun x => do return ((← `(tactic| revert $(mkIdent x):ident)).raw, "revert " ++ nameToString x),
-    fun x => do
-      return ((← `(tactic| exists $(mkIdent x):term)).raw, "exists " ++ nameToString x),
-    -- fun x => do return (← `(tactic| rw [$(mkIdent x):ident])).raw
-    fun x => do
-      return ((← `(tactic| rewrite [$(mkIdent x):ident])).raw, "rewrite  [" ++ nameToString x ++ "]")
-  ]
 
 @[server_rpc_method]
 def getApplicableTactics
   (_params : GetApplicableTacticsParams)
-  : RequestM (RequestTask ((List APINode) × WithRpcRef State)) :=
+  : RequestM (RequestTask ((List (List APINode)) × WithRpcRef State.State)) :=
   RequestM.withWaitFindSnapAtPos _params.pos fun snap => do
     RequestM.runTermElabM snap do
       -- get all tactics, counter, and maps
@@ -265,96 +169,55 @@ def getApplicableTactics
       -- get mvarId and proof state for goal
       match goalMap.get? _params.id with
       | some (mvarId, proofState) =>
-
-        liftM (restoreStateFull proofState : Lean.Elab.TermElabM Unit)
-
-        -- get display of tactics and add tactics that take an arg from the context
-        let ts := allTactics.map (fun t => (t, t.raw.prettyPrint.pretty))
-        let mut tsArray := ts.toArray
-        let lctx := (← liftM (mvarId.getDecl : Elab.TermElabM _)).lctx
-        -- let lctx ← liftM (Lean.LocalContext.sanitizeNames lctx : Elab.TermElabM LocalContext)
-        let allDecls := lctx.decls.toList
-        -- for each tactic that takes an arg and each declaration in the context
-        -- add the tactic applied to that declaration
-        for tac in argTactics do
-          for decl? in allDecls do
-            let some decl := decl? | continue
-            if decl.isImplementationDetail then continue
-            if decl.isAuxDecl then continue -- TODO?
-            let declName := decl.userName
-            -- if declName.isInternal || declName.isInternalDetail || declName.isAnonymous
-              -- || declName.isInaccessibleUserName
-              --  then continue
-            let (t, display) ← liftM (tac declName : Elab.TermElabM (Syntax × String))
-            tsArray := tsArray.push ({raw:=t}, display)
-        let ts' := tsArray.toList
-
-        -- run each tactic, recording the error message if it failed
-        -- return tactic, display for tactic, whether it's a noop, and whether it solves the goal
-        let evalTac t :
-            RequestT Elab.TermElabM (Syntax × Option String × Bool × Bool) := do
-          liftM (restoreStateFull proofState : Lean.Elab.TermElabM Unit)
-          -- get existing messages before running the tactic
-          let msgsBefore ←
-            liftM ((do return (← getThe Core.State).messages.toList) : Elab.TermElabM _)
+        -- liftM (restoreStateFull proofState : Lean.Elab.TermElabM Unit) -- TODO maybe we can remove this line
+        let tacInput : TacInput := {goal:=mvarId, savedState:=proofState}
+        let runTac (t : ProtoTactic) : Elab.TermElabM (List TacOutput) := do
           try
-            -- run the tactic
-            let goals ← liftM (runTacticSafely mvarId t : Lean.Elab.TermElabM _)
-            -- get new messages
-            let newMsgs ←
-              liftM ((do return (← getThe Core.State).messages.toList.drop msgsBefore.length)
-                : Elab.TermElabM _)
-            match newMsgs.find? (fun m => m.severity matches .error) with
-            | some err =>
-              -- if the tactic "fails softly" (logs an error-severity message), record the error message
-              return (t, some (← err.data.toString), false, false)
-            | none =>
-              -- if the tactic doesn't assign or change the goal, mark it noop
-              -- if the tactic results in 0 goals and assigns the mvar, mark it as solving the goal
-              let assigned ← liftM (mvarId.isAssigned : Lean.Elab.TermElabM Bool)
-              return (t, none, goals == [mvarId] && !assigned, goals == [] && assigned)
-          catch e =>
-            -- if the tactic throws, record the error message
-            return (t, some (← e.toMessageData.toString), false, false)
-        let results ← ts'.mapM (fun (t, display) => return (← evalTac t, display))
-        liftM (restoreStateFull proofState : Lean.Elab.TermElabM Unit)
-
-        let (succeedingResults, failingResults) :=
-          results.partition (·.1.2.1.isNone)
-
-        -- add each new tactic to map and return nodes and updated counter
-        let f acc res := match acc, res with
-          | (nodes, tempTacticMap, c), ((stx, tacErr, noop, solvesGoal), display) =>
+            restoreStateFull proofState
+            t tacInput
+          catch e => do
+            let errMessage ← e.toMessageData.toString
+            let errTac ← errTacOutput Syntax.missing "Tactic display unavailable." errMessage
+            return [errTac]
+        let results ← allTactics.mapM (fun t => runTac t)
+        -- add each new tactic to map and get list of api nodes and updated counter
+        let mut tacListList := []
+        let mut counter := nodeCounter
+        let mut tacMap := tacticMap
+        for resList in results do
+          let mut tacList := []
+          for result@{stx, goals, display, isNoop, solvesGoal, postState, error} in resList do
+            let tacErr :=
+              if isErrTacOutput result then
+                some (error.getD "tactic left no goals without closing the goal")
+              else none
             let apiNode : APINode :=
-              {isGoal := false, id := c,
+              {isGoal := false, id := counter,
                 display := display,
-                tacticError := tacErr, noop := noop, solvesGoal := solvesGoal}
-            let tacticInfo := (stx, _params.id)
-            let newMap := tempTacticMap.insert c tacticInfo
-            (apiNode :: nodes, newMap, c + 1)
-        let (tacticsSuccess, newTacticMapSuccess, newCounterSuccess) :=
-          succeedingResults.foldl f ([], tacticMap, nodeCounter)
-        let (tacticsAll, newTacticMapAll, newCounterAll) :=
-          failingResults.foldl f
-            (tacticsSuccess, newTacticMapSuccess, newCounterSuccess)
+                tacticError := tacErr,
+                noop := isNoop, solvesGoal := solvesGoal}
+            tacList := apiNode :: tacList
+            tacMap := tacMap.insert counter (result, _params.id)
+            counter := counter + 1
+          tacListList := tacList :: tacListList
 
         -- update state (cluster membership is unchanged by tactic expansion)
         let newState ← WithRpcRef.mk {
             allTactics := allTactics
-            nodeCounter := newCounterAll
+            nodeCounter := counter
             goalMap := goalMap,
-            tacticMap := newTacticMapAll,
+            tacticMap := tacMap,
             clusterMap := clusterMap
           }
 
-        pure (tacticsAll, newState)
+        pure (tacListList, newState)
       | _ =>
         let errNode : APINode := {
             isGoal := true, id := nodeCounter,
             display := s!"Unable to find state for goal " ++
                 s!"{_params.id}."
           }
-        pure ([errNode], _params.stateRef) -- TODO: error behavior
+        pure ([[errNode]], _params.stateRef) -- TODO: error behavior
 
 
 @[widget_module]
@@ -381,8 +244,9 @@ elab stx:"hoverfly" : tactic => do
     ]
 
   -- initialize state
-  let initialState : State := {
-      allTactics := tacs ++ lemmaApps.toList -- TODO, we need the rest
+  let initialState : State.State := {
+      allTactics := tacs ++
+        (lemmaApps.toList.map (fun t => syntaxToProtoTactic t.raw)) -- TODO, we need the rest
       nodeCounter := rootGoal.id + 1,
       goalMap := initialGoalMap,
       tacticMap := ∅

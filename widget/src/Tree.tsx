@@ -14,6 +14,7 @@ type MutableNode = {
   solvesGoal: boolean // for tactics: solves the goal
   originalId: ID | undefined, // the ID of the node this has been copied from, if applicable
   leanOrder?: number, // for goals: position in Lean's goal order under the parent tactic
+  groupId?: number, // for tactics: which prototactic produced it
   completed: boolean, // a completed goal or tactic with all completed subgoals
   children: Node[], // applicable tactics for a goal, clusters for a tactic, goals for a cluster
   status: Status, // display information
@@ -357,6 +358,40 @@ export function findDescendant(n: Node, id: ID): Readonly<Node> | undefined {
 export function succeedingChildren(n: Node): Readonly<Node>[] {
   return navChildren(n).filter((c) =>
     c.kind !== 'tactic' || (!c.noop && !c.tacticError))
+}
+
+/* Prototactic grouping (display only) */
+
+// Names a group by its members' longest shared token prefix, or a count if they share none.
+export function groupLabel(members: Node[]): string {
+  if (members.length === 0) return ''
+  const toks = members.map((m) => m.display.trim().split(/\s+/))
+  const shortest = Math.min(...toks.map((t) => t.length))
+  let i = 0
+  while (i < shortest && toks.every((t) => t[i] === toks[0][i])) i++
+  return i === 0 ? members.length + ' variants' : toks[0].slice(0, i).join(' ')
+}
+
+// Coalesce maximal runs sharing a groupId, in order. Runs of one and untagged nodes
+// come back bare, so callers render them without a wrapper.
+export function groupTactics(children: Node[]): (Node | Node[])[] {
+  const out: (Node | Node[])[] = []
+  let run: Node[] = []
+  const flush = () => {
+    if (run.length > 0) out.push(run.length === 1 ? run[0] : run)
+    run = []
+  }
+  for (const c of children) {
+    if (c.groupId === undefined) {
+      flush()
+      out.push(c)
+    } else {
+      if (run.length > 0 && run[0].groupId !== c.groupId) flush()
+      run.push(c)
+    }
+  }
+  flush()
+  return out
 }
 
 /* Util */
