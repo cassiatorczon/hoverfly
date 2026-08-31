@@ -25,6 +25,17 @@ structure GetSubgoalsParams where
   deriving RpcEncodable
 
 
+/-- Run tactic `stx` against goal `mvarId`. Same as `run mvarId (evalTactic stx)`, except that
+Lean's runtime exceptions are rethrown as ordinary ones.
+
+This fixes a bug where `simp` running out of heartbeats was crashing hoverfly rather than showing up
+as `simp` failing. -/
+def runTacticSafely (mvarId : MVarId) (stx : Syntax) : Lean.Elab.TermElabM (List MVarId) :=
+  tryCatchRuntimeEx
+    (Core.withCurrHeartbeats <| Elab.Term.withoutErrToSorry <| run mvarId do evalTactic stx)
+    fun e => do
+      if e.isRuntime then throwError "{← e.toMessageData.toString}" else throw e
+
 @[server_rpc_method]
 def getSubgoals
   (_params : GetSubgoalsParams)
