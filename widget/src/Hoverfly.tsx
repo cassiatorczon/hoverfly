@@ -184,7 +184,7 @@ function renderBadge(kind: BadgeKind): React.ReactNode {
       return <span className="badge-cached"
         title="Cached — progress stored, no full proof yet">◕</span>
     case 'explored':
-      return <span className="badge-explored" title="Already explored">•</span> // todo: maybe we should highlight or sth instead
+      return <span className="badge-explored" title="Already explored">•</span> // TODO: maybe we should highlight or sth instead
     case 'none':
       return null
   }
@@ -437,11 +437,11 @@ function Hoverfly(props: HoverflyProps) {
             console.debug("Is explored " + newNode.explored)
           }
         } else {
-          // todo error
+          // TODO is this the error behavior we want
           console.error("No new node found with id " + n.id)
         }
       } else {
-        // todo error
+        // TODO is this the error behavior we want
         console.error("No new root found after clicking " + n.id)
       }
 

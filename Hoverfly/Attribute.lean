@@ -9,8 +9,7 @@ public meta section
 
 open Lean Elab Command TacticUtil ProtoTactic State
 
--- TODO: this lets us add lemmas, not tactics
-
+-- todo: connect this
 initialize hoverflyLemmaExt : SimplePersistentEnvExtension Name (Array Name) ←
   registerSimplePersistentEnvExtension {
     addEntryFn := Array.push
