@@ -75,7 +75,7 @@ def instantiateArgs (tac : Syntax) (lctx : LocalContext) : List Syntax :=
   let argLists := pickNWithRep filteredArgs numArgs
   argLists.map (fun argList => replaceHyps argList tac)
 
-def runTac (t : Syntax) (mvarId : MVarId) (st : SavedState):
+def runTacSyntax (t : Syntax) (mvarId : MVarId) (st : SavedState):
   Elab.TermElabM TacOutput := do
   -- restore state
   liftM (restoreStateFull st : Lean.Elab.TermElabM Unit)
@@ -117,8 +117,21 @@ public def syntaxToProtoTactic
     let tacs := instantiateArgs tac (← liftM (goal.getDecl : Elab.TermElabM _)).lctx
     -- The `MonadExcept` instance for `TermElabM` rethrows timeouts, so we need to catch it again
     tacs.mapM fun t =>
-      tryCatchRuntimeEx (runTac t goal savedState) fun e => do
+      tryCatchRuntimeEx (runTacSyntax t goal savedState) fun e => do
         liftM (restoreStateFull savedState : Lean.Elab.TermElabM Unit)
         errTacOutput t t.prettyPrint.pretty (← e.toMessageData.toString)
+
+public def runProtoTactic
+  (t : ProtoTactic)
+  (proofState : Elab.Term.SavedState)
+  (tacInput : TacInput)
+  : Elab.TermElabM (List TacOutput) := do
+  try
+    restoreStateFull proofState
+    t tacInput
+  catch e => do
+    let errMessage ← e.toMessageData.toString
+    let errTac ← errTacOutput Syntax.missing "Tactic display unavailable." errMessage
+    return [errTac]
 
 end TacticUtil
