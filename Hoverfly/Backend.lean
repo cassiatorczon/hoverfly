@@ -12,7 +12,7 @@ structure APINode where
   display : String
   tacticError : Option String := none
   noop : Bool := false
-  solvesGoal : Bool := false -- todo: maybe make this and noop an enum?
+  solvesGoal : Bool := false -- TODO: maybe make this and noop an enum?
   originalId : Option StateId := none
   leanOrder : Nat := 0
   sharedMVars : List String := []
@@ -155,6 +155,38 @@ def nameToString (n : Name) : String :=
   -- | .num p i => p.toString
   -- | _ => "?"
 
+def convertTacOutputsAndUpdateMap
+  (results: List (List TacOutput))
+  (tacticMap : Std.HashMap StateId (TacOutput × StateId))
+  (nodeCounter : StateId)
+  (parentId : StateId)
+  : Elab.TermElabM
+    (List (List APINode)
+    × (Std.HashMap StateId (TacOutput × StateId))
+    × StateId) := do
+    -- add each new tactic to map and get list of api nodes and updated counter
+  let mut tacListList := []
+  let mut counter := nodeCounter
+  let mut tacMap := tacticMap
+  for resList in results do
+    let mut tacList := []
+    for (result : TacOutput) in resList do
+      let tacErr :=
+        if isErrTacOutput result then
+          some (result.error.getD "tactic left no goals without closing the goal")
+        else none
+      let apiNode : APINode :=
+        {isGoal := false, id := counter,
+          display := result.display,
+          tacticError := tacErr,
+          noop := result.isNoop, solvesGoal := result.solvesGoal}
+      tacList := apiNode :: tacList
+      tacMap := tacMap.insert counter (result, parentId)
+      counter := counter + 1
+    tacListList := tacList :: tacListList
+
+  return (tacListList, tacMap, counter)
+
 
 @[server_rpc_method]
 def getApplicableTactics
@@ -169,48 +201,24 @@ def getApplicableTactics
       -- get mvarId and proof state for goal
       match goalMap.get? _params.id with
       | some (mvarId, proofState) =>
-        -- liftM (restoreStateFull proofState : Lean.Elab.TermElabM Unit) -- TODO maybe we can remove this line
+        -- run tactics
         let tacInput : TacInput := {goal:=mvarId, savedState:=proofState}
-        let runTac (t : ProtoTactic) : Elab.TermElabM (List TacOutput) := do
-          try
-            restoreStateFull proofState
-            t tacInput
-          catch e => do
-            let errMessage ← e.toMessageData.toString
-            let errTac ← errTacOutput Syntax.missing "Tactic display unavailable." errMessage
-            return [errTac]
-        let results ← allTactics.mapM (fun t => runTac t)
-        -- add each new tactic to map and get list of api nodes and updated counter
-        let mut tacListList := []
-        let mut counter := nodeCounter
-        let mut tacMap := tacticMap
-        for resList in results do
-          let mut tacList := []
-          for result@{stx, goals, display, isNoop, solvesGoal, postState, error} in resList do
-            let tacErr :=
-              if isErrTacOutput result then
-                some (error.getD "tactic left no goals without closing the goal")
-              else none
-            let apiNode : APINode :=
-              {isGoal := false, id := counter,
-                display := display,
-                tacticError := tacErr,
-                noop := isNoop, solvesGoal := solvesGoal}
-            tacList := apiNode :: tacList
-            tacMap := tacMap.insert counter (result, _params.id)
-            counter := counter + 1
-          tacListList := tacList :: tacListList
+        let results ← allTactics.mapM (fun t => runProtoTactic t proofState tacInput)
 
-        -- update state (cluster membership is unchanged by tactic expansion)
+        -- convert TacOutputs to APINodes and update tactic map
+        let (apiNodes, tacMap, counter) ←
+          convertTacOutputsAndUpdateMap results tacticMap nodeCounter _params.id
+
+        -- update state
         let newState ← WithRpcRef.mk {
-            allTactics := allTactics
-            nodeCounter := counter
-            goalMap := goalMap,
-            tacticMap := tacMap,
-            clusterMap := clusterMap
-          }
+          allTactics := allTactics,
+          nodeCounter := counter
+          goalMap := goalMap
+          tacticMap := tacMap
+          clusterMap := clusterMap
+        }
 
-        pure (tacListList, newState)
+        pure (apiNodes, newState)
       | _ =>
         let errNode : APINode := {
             isGoal := true, id := nodeCounter,
