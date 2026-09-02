@@ -360,6 +360,26 @@ export function succeedingChildren(n: Node): Readonly<Node>[] {
     c.kind !== 'tactic' || (!c.noop && !c.tacticError))
 }
 
+export function visibleNodes(n: Node): Node[] {
+  return n.visible ? [n, ...n.children.flatMap(visibleNodes)] : []
+}
+
+export function nextOpenGoal(root: Node, fromId: ID): Node | undefined {
+  const nodes = visibleNodes(root)
+  const i = nodes.findIndex((n) => n.id === fromId)
+  return nodes.slice(i + 1).find(isFrontier) ?? nodes.find(isFrontier)
+}
+
+// A goal's display with its hypotheses replaced by `…`.
+export function compactGoal(display: string): string {
+  const lines = display.split('\n')
+  const t = lines.findIndex((l) => l.startsWith('⊢'))
+  if (t <= 0) return display
+  const tags = lines.slice(0, t).filter((l) => l.startsWith('case '))
+  const hyps = t > tags.length ? ['…'] : []
+  return [...tags, ...hyps, lines.slice(t).join('\n')].join(' ')
+}
+
 /* Prototactic grouping (display only) */
 
 // Names a group by its members' longest shared token prefix, or a count if they share none.

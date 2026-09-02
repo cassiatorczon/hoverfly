@@ -353,9 +353,40 @@
   background: color-mix(in srgb, var(--goal) 14%, transparent);
   border-left-color: var(--goal);
 }
+
 .hf .no-tactics {
   padding: 3px 7px;
   font-size: 11px;
   font-style: italic;
   color: var(--vscode-errorForeground, var(--vscode-editorError-foreground));
+}
+
+.hf .rowA .fold {
+  flex: none;
+  width: .8em;
+  font-size: 10px;
+  color: var(--vscode-descriptionForeground);
+  cursor: pointer;
+}
+
+.hf .rowA .script {
+  flex: 1 1 0;
+  min-width: 4em;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hf .banner-next {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 10px 0;
+  padding: 4px 9px;
+  border-radius: 5px;
+  color: var(--goal);
+  background: color-mix(in srgb, var(--goal) 10%, transparent);
 }

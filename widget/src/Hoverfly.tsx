@@ -32,7 +32,10 @@ import {
   recomputeInactive,
   succeedingChildren,
   groupLabel,
-  groupTactics
+  groupTactics,
+  compactGoal,
+  visibleNodes,
+  nextOpenGoal
 } from './Tree'
 import { serializeTree } from './Serialize'
 import { sessionKey, loadSession, saveSession, clearSession } from './Session'
@@ -221,7 +224,9 @@ function renderMarker(kind: MarkerKind): React.ReactNode {
 type RenderCtx = {
   onClick: (clicked: Node) => Promise<void>,
   linkedId: number | undefined,
-  setLinkedId: (id: number | undefined) => void
+  setLinkedId: (id: number | undefined) => void,
+  pins: Set<number>, // goals the user has expanded by hand
+  togglePin: (id: number) => void
 }
 
 function scrollToNode(from: Element, id: number): void {
@@ -294,6 +299,12 @@ function renderNode(n: Node, ctx: RenderCtx, orphaned = false)
           : ''
   const marker = renderMarker(markerFor(n))
 
+  const pinned = ctx.pins.has(n.id)
+  const foldable = n.kind === 'goal' && n.status !== 'selected' && !frontier
+  const compact = foldable && !pinned
+  const script = n.kind === 'goal' && n.completed && !onPath && !orphaned
+    ? serializeTree(n).replace(/\s+/g, ' ') : undefined
+
   const row = (
     <div className={`rowA ${n.kind} ${n.status} ${successClass} ${stateClass}`
       + (inactive ? ' inactive' : '')
@@ -305,11 +316,19 @@ function renderNode(n: Node, ctx: RenderCtx, orphaned = false)
           ? "Still open — this goal needs a proof" : undefined}>
         {marker}
       </span>
-      <span className={solvesGoal ? "disp solves-goal" : "disp"}>
-        {n.display}
+      <span className="fold"
+        title={foldable ? (pinned ? "Collapse" : "Expand") : undefined}
+        onClick={foldable
+          ? (e) => { e.stopPropagation(); ctx.togglePin(n.id) } : undefined}>
+        {foldable && (pinned ? '▾' : '▸')}
+      </span>
+      <span className={solvesGoal ? "disp solves-goal" : "disp"}
+        title={compact ? n.display : undefined}>
+        {compact ? compactGoal(n.display) : n.display}
         {solvesGoal &&
           <span> [Solves the current goal.]</span>}
       </span>
+      {script && <span className="script" title={script}>{script}</span>}
       {n.redirectTo !== undefined &&
         <RedirectStub dir="out" target={n.redirectTo} ctx={ctx}
           title={"This goal continues as #" + n.redirectTo + ", carried under "
@@ -342,6 +361,18 @@ function HoverflyTree({ root, onClick, onWrite, onReset, scriptHasSorry }: {
   const [linkedId, setLinkedId] = useState<number | undefined>(undefined)
   const [confirming, setConfirming] = useState(false)
   const [confirmingReset, setConfirmingReset] = useState(false)
+  const [pins, setPins] = useState<Set<number>>(new Set())
+  const togglePin = (id: number) => setPins((ps) => {
+    const next = new Set(ps)
+    next.has(id) ? next.delete(id) : next.add(id)
+    return next
+  })
+
+  const nodes = visibleNodes(root)
+  const selected = nodes.find((n) => n.status === 'selected')
+  const open = nodes.filter(isFrontier).length
+  const next = selected?.completed && !root.completed
+    ? nextOpenGoal(root, selected.id) : undefined
 
   return (
     <div className="hf">
@@ -352,9 +383,16 @@ function HoverflyTree({ root, onClick, onWrite, onReset, scriptHasSorry }: {
         </div>}
       <div className="treeA">
         <ul className="kids flush">
-          {renderNode(root, { onClick, linkedId, setLinkedId })}
+          {renderNode(root, { onClick, linkedId, setLinkedId, pins, togglePin })}
         </ul>
       </div>
+      {next &&
+        <div className="banner-next">
+          ✓ Goal closed · {open} open {open === 1 ? 'goal' : 'goals'} remain
+          <button className="write-btn" onClick={() => onClick(next)}>
+            Next open goal ↓
+          </button>
+        </div>}
       <div className="toolbar">
         {confirming
           ? <span className="confirm">

@@ -17,6 +17,8 @@ import {
   selectRoot,
   groupLabel,
   groupTactics,
+  compactGoal,
+  nextOpenGoal,
   Node
 } from '../src/Tree'
 import { goal, tactic, cluster, findById } from './testUtils'
@@ -568,4 +570,43 @@ test('groupTactics preserves order and never merges separated runs', () => {
 
 test('groupTactics on an empty list is empty', () => {
   assert.deepEqual(groupTactics([]), [])
+})
+
+/* compactGoal */
+
+test('compactGoal replaces hypotheses with an ellipsis, keeping case and target', () => {
+  assert.equal(compactGoal('case inl\nx : Nat\nh : x > 0\n⊢ x ≠ 0'),
+    'case inl … ⊢ x ≠ 0')
+  assert.equal(compactGoal('⊢ True'), '⊢ True')
+  assert.equal(compactGoal('h : P\n⊢ P ∧\n  Q'), '… ⊢ P ∧\n  Q')
+  assert.equal(compactGoal('not a goal'), 'not a goal')
+})
+
+/* nextOpenGoal */
+
+test('nextOpenGoal picks the next open goal in tree order, wrapping around', () => {
+  // t0 -> [g1 (done), g2 (open), g3 (open)]; g1 holds the selection.
+  const root = tactic(0, 't', {
+    status: 'semiselected',
+    children: [
+      goal(1, 'g1', {
+        status: 'semiselected',
+        children: [tactic(4, 'rfl', { status: 'selected', explored: true })]
+      }),
+      goal(2, 'g2'),
+      goal(3, 'g3')
+    ]
+  })
+  const r = recomputeCompleted(root)
+  assert.equal(nextOpenGoal(r, 4)?.id, 2)
+  assert.equal(nextOpenGoal(r, 2)?.id, 3)
+  assert.equal(nextOpenGoal(r, 3)?.id, 2)
+})
+
+test('nextOpenGoal is undefined when nothing is open', () => {
+  const root = goal(0, 'g', {
+    status: 'selected',
+    children: [tactic(1, 'rfl', { status: 'selected', explored: true })]
+  })
+  assert.equal(nextOpenGoal(recomputeCompleted(root), 1), undefined)
 })
