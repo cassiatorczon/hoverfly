@@ -204,7 +204,7 @@ function renderMarker(kind: MarkerKind): React.ReactNode {
       return <span className="marker-badge"
         title="Restore your saved progress">Redo</span>
     case 'dot':
-      return '⋅'
+      return '⚫︎'
   }
 }
 
