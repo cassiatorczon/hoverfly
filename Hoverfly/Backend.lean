@@ -234,57 +234,33 @@ def getApplicableTactics
         _params.id
 
 
-structure GetSubgoalsForCustomTacticParams where
+structure AddCustomTacticParams where
   parentGoalId : StateId
   tacString : String
   stateRef : WithRpcRef State.State
   pos : Lsp.Position
   deriving RpcEncodable
 
+structure AddCustomTacticResult where
+  parseError : Option String := none
+  tactics : List APINode := []
+  deriving ToJson, FromJson
+
+/-- Parse `tacString` as a single tactic, run it against the goal `parentGoalId`, and
+record it as a new child of that goal. -/
 @[server_rpc_method]
-def getSubgoalsForCustomTactic
-  (_params : GetSubgoalsForCustomTacticParams)
-  : RequestM (RequestTask ((List (List APINode)) × WithRpcRef State.State)) :=
+def addCustomTactic
+  (_params : AddCustomTacticParams)
+  : RequestM (RequestTask (AddCustomTacticResult × WithRpcRef State.State)) :=
   RequestM.withWaitFindSnapAtPos _params.pos fun snap => do
     RequestM.runTermElabM snap do
-      match _params.stateRef.val.goalMap.get? _params.parentGoalId with
-      | some (mvarId, proofState) =>
-        restoreStateFull proofState
-        let env ← getEnv
-        let catName := `tactic
-        match Lean.Parser.runParserCategory env catName _params.tacString with
-        | .error e =>
-            let errNode : APINode := {
-              isGoal := true, id := _params.stateRef.val.nodeCounter,
-              display :=
-                s!"Unable to parse '{_params.tacString}' as tactic:\n {e}"
-            }
-            return ([[errNode]], _params.stateRef)
-        | .ok stx =>
-          -- convert to tactic
-          let t := syntaxToProtoTactic stx
-          let (outputs, newState) ← runProtoTacticsAtGoalAndState
-            [t]
-            _params.stateRef.val
-            _params.parentGoalId
+      match Lean.Parser.runParserCategory (← getEnv) `tactic _params.tacString with
+      | .error e => pure ({ parseError := some e }, _params.stateRef)
+      | .ok stx =>
+        let (outputs, newState) ← runProtoTacticsAtGoalAndState
+          [syntaxToProtoTactic stx] _params.stateRef.val _params.parentGoalId
+        pure ({ tactics := outputs.flatten }, newState)
 
-          match outputs with
-          | [[t']] =>
-            getSubgoalsAux newState.val t'.id
-          | _ =>
-            let errNode : APINode := {
-              isGoal := true, id := _params.stateRef.val.nodeCounter,
-              display := s!"Unexpected number of output lists for tactic " ++
-                  _params.tacString
-              }
-            pure ([[errNode]], _params.stateRef) -- TODO is this the error behavior we want
-      | none =>
-        let errNode : APINode := {
-          isGoal := true, id := _params.stateRef.val.nodeCounter,
-          display := s!"Unable to find state for goal " ++
-              s!"{_params.parentGoalId}."
-          }
-        pure ([[errNode]], _params.stateRef) -- TODO is this the error behavior we want
 /-- Hands each elaboration of `hoverfly` a fresh ID that the widget can use to save trees. -/
 initialize hoverflySessionCounter : IO.Ref Nat ← do
   IO.mkRef ((← IO.monoNanosNow) / 1000000)

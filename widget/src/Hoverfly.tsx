@@ -35,9 +35,10 @@ import {
   groupTactics,
   compactGoal,
   visibleNodes,
-  nextOpenGoal
+  nextOpenGoal,
+  navChildren
 } from './Tree'
-import { serializeTree } from './Serialize'
+import { serializeTree, normalizeTactic } from './Serialize'
 import { sessionKey, loadSession, saveSession, clearSession } from './Session'
 import {
   APIData,
@@ -45,6 +46,7 @@ import {
   NodeAndStateRef,
   APINodeToNode,
   getApplicableTactics,
+  addCustomTactic,
   handleClick
 } from './Handler'
 import hoverflyStyles from './styles.css'
@@ -76,6 +78,54 @@ function HoverError({ message, children }: {
     <div className="err-wrap" onMouseEnter={onEnter} onMouseLeave={onLeave}>
       {children}
       {show && <div className="err-tooltip">{message}</div>}
+    </div>
+  )
+}
+
+function CustomTacticRow({ goal, ctx }: { goal: Node, ctx: RenderCtx }) {
+  const draft = ctx.drafts.get(goal.id) ?? { text: '' }
+  const ref = useRef<HTMLInputElement>(null)
+  const set = (d: Partial<Draft>) => ctx.setDraft(goal.id, { ...draft, ...d })
+
+  useEffect(() => {
+    if (!draft.pending && ctx.focusInput) {
+      ref.current?.focus()
+      ctx.setFocusInput(false)
+    }
+  }, [draft.pending])
+
+  const submit = async () => {
+    const text = draft.text.trim()
+    if (text === '' || draft.pending) return
+    ctx.setFocusInput(ref.current === document.activeElement)
+    set({ pending: true, feedback: undefined })
+    const feedback = await ctx.onCustomTactic(goal, text)
+    ctx.setDraft(goal.id, feedback === undefined
+      ? { text: '' } : { text: draft.text, feedback })
+  }
+
+  return (
+    <div className="custom">
+      <div className={'rowA tactic custom-row'
+        + (draft.text.trim() !== '' && !draft.pending ? ' frontier' : '')}>
+        <span className="marker">
+          {draft.pending
+            ? '…'
+            : draft.text.trim() !== '' &&
+            <span className="marker-badge" title="Run the typed tactic"
+              onClick={submit}>Run</span>}
+        </span>
+        <span className="fold" />
+        <input ref={ref} className="custom-input" value={draft.text}
+          disabled={draft.pending}
+          placeholder="type a tactic…"
+          onChange={(e) => set({ text: e.target.value, feedback: undefined })}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') submit()
+            else if (e.key === 'Escape') set({ text: '', feedback: undefined })
+          }} />
+      </div>
+      {draft.feedback && <div className="custom-feedback">{draft.feedback}</div>}
     </div>
   )
 }
@@ -120,6 +170,8 @@ function renderChildren(n: Node, ctx: RenderCtx): React.ReactNode {
         <li><div className="no-tactics">No tactics apply successfully.</div></li>}
       {solvesGoalChildren.map((child: Node) => renderNode(child, ctx))}
       {renderTacticBucket(mainChildren, ctx)}
+      {n.status === 'selected' &&
+        <li><CustomTacticRow goal={n} ctx={ctx} /></li>}
       {noopChildren.length > 0 &&
         <li>
           <details className="failing-group">
@@ -163,6 +215,7 @@ function renderTacticBucket(children: Node[], ctx: RenderCtx): React.ReactNode[]
           <summary>
             <div className="rowA tactic group-row">
               <span className="marker"><span className="caret">▸</span></span>
+              <span className="fold" />
               <span className="disp">{groupLabel(entry)}</span>
               <span className="group-count">{entry.length} options</span>
               {badges.length > 0 &&
@@ -221,8 +274,15 @@ function renderMarker(kind: MarkerKind): React.ReactNode {
   }
 }
 
+type Draft = { text: string, feedback?: string, pending?: boolean }
+
 type RenderCtx = {
   onClick: (clicked: Node) => Promise<void>,
+  onCustomTactic: (goal: Node, text: string) => Promise<string | undefined>,
+  drafts: Map<number, Draft>,
+  setDraft: (id: number, draft: Draft) => void,
+  focusInput: boolean,
+  setFocusInput: (b: boolean) => void,
   linkedId: number | undefined,
   setLinkedId: (id: number | undefined) => void,
   pins: Set<number>, // goals the user has expanded by hand
@@ -328,6 +388,7 @@ function renderNode(n: Node, ctx: RenderCtx, orphaned = false)
         {solvesGoal &&
           <span> [Solves the current goal.]</span>}
       </span>
+      {n.custom && <span className="custom-tag" title="Typed by you">⌨</span>}
       {script && <span className="script" title={script}>{script}</span>}
       {n.redirectTo !== undefined &&
         <RedirectStub dir="out" target={n.redirectTo} ctx={ctx}
@@ -351,9 +412,12 @@ function renderNode(n: Node, ctx: RenderCtx, orphaned = false)
   )
 }
 
-function HoverflyTree({ root, onClick, onWrite, onReset, scriptHasSorry }: {
+function HoverflyTree({
+  root, onClick, onCustomTactic, onWrite, onReset, scriptHasSorry
+}: {
   root: Node,
   onClick: (n: Node) => Promise<void>,
+  onCustomTactic: (goal: Node, text: string) => Promise<string | undefined>,
   onWrite: (() => Promise<void>) | undefined,
   onReset: () => void,
   scriptHasSorry: boolean
@@ -362,6 +426,10 @@ function HoverflyTree({ root, onClick, onWrite, onReset, scriptHasSorry }: {
   const [confirming, setConfirming] = useState(false)
   const [confirmingReset, setConfirmingReset] = useState(false)
   const [pins, setPins] = useState<Set<number>>(new Set())
+  const [drafts, setDrafts] = useState<Map<number, Draft>>(new Map())
+  const [focusInput, setFocusInput] = useState(false)
+  const setDraft = (id: number, draft: Draft) =>
+    setDrafts((ds) => new Map(ds).set(id, draft))
   const togglePin = (id: number) => setPins((ps) => {
     const next = new Set(ps)
     next.has(id) ? next.delete(id) : next.add(id)
@@ -383,7 +451,10 @@ function HoverflyTree({ root, onClick, onWrite, onReset, scriptHasSorry }: {
         </div>}
       <div className="treeA">
         <ul className="kids flush">
-          {renderNode(root, { onClick, linkedId, setLinkedId, pins, togglePin })}
+          {renderNode(root, {
+            onClick, onCustomTactic, drafts, setDraft, focusInput, setFocusInput,
+            linkedId, setLinkedId, pins, togglePin
+          })}
         </ul>
       </div>
       {next &&
@@ -490,12 +561,12 @@ function HoverflySession(props: HoverflyProps & { storeKey: string }) {
     }
     return <>Loading...</>
   } else {
-    const onClick = async (n: Node) => {
+    const clickFrom = async (from: NodeAndStateRef, n: Node) => {
       console.info("Clicked node " + n.id)
 
       const wasExplored = n.explored
 
-      const newRoot = await handleClick(current.node, current.stateRef, n, rs, props.pos)
+      const newRoot = await handleClick(from.node, from.stateRef, n, rs, props.pos)
       setSaved(newRoot)
 
       if (newRoot) {
@@ -527,6 +598,30 @@ function HoverflySession(props: HoverflyProps & { storeKey: string }) {
       }
 
     }
+    const onClick = (n: Node) => clickFrom(current, n)
+
+    const onCustomTactic = async (goal: Node, text: string) => {
+      const same = (c: Node) => c.kind === 'tactic' && c.tacticError === undefined
+        && normalizeTactic(c.display) === normalizeTactic(text)
+      const existing = navChildren(goal).find(same)
+      if (existing) {
+        await onClick(existing)
+        return undefined
+      }
+
+      const res = await addCustomTactic(
+        current.node, goal, text, current.stateRef, rs, props.pos)
+      if (res.kind === 'parseError') return res.message
+
+      const added = { node: res.node, stateRef: res.stateRef }
+      setSaved(added)
+      if (res.tactics.length !== 1) return undefined
+      const t = res.tactics[0]
+      if (t.tacticError !== undefined) return t.tacticError
+      if (t.noop) return "The tactic ran but did not change the goal."
+      await clickFrom(added, t)
+      return undefined
+    }
 
     // `inactive`, `completed`, and `visible` are all derived from tree
     // structure, so compute a fresh display copy here rather than threading them
@@ -553,7 +648,8 @@ function HoverflySession(props: HoverflyProps & { storeKey: string }) {
     }
 
     return <><HoverflyTree root={displayRoot} onClick={onClick}
-      onWrite={onWrite} onReset={onReset} scriptHasSorry={scriptHasSorry} /></>
+      onCustomTactic={onCustomTactic} onWrite={onWrite} onReset={onReset}
+      scriptHasSorry={scriptHasSorry} /></>
   }
 }
 

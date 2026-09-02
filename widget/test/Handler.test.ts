@@ -8,6 +8,7 @@ import {
 import {
   handleClick,
   getApplicableTactics,
+  addCustomTactic,
   APINodeToNode,
   APIData,
   APINode
@@ -362,3 +363,60 @@ test('a tagged group renders as one collapsible entry', async () => {
     [1, [2, 3, 4]])
   assert.equal(groupLabel(grouped[1] as Node[]), 'induction')
 })
+
+// Custom (typed) tactics.
+async function makeCustomSession(tacString: string,
+  reply: { parseError?: string, tactics: any[] }) {
+  const { rs, calls } = mockRpc(foobarResponder)
+  const call = rs.call
+  rs.call = async (method: string, params: any) => {
+    if (method !== 'Backend.addCustomTactic') return call(method, params)
+    calls.push({ method, id: params.parentGoalId })
+    assert.equal(params.tacString, tacString)
+    return [reply, { p: 'custom-state' }]
+  }
+  const rootApi: APINode = { isGoal: true, id: 0, display: '1 = 1 /\\ 2 = 2' }
+  const loaded = await getApplicableTactics(
+    selectRoot(APINodeToNode(rootApi)), { p: 'init' }, rs as any, dummyPos)
+  const res = await addCustomTactic(
+    loaded.node, loaded.node, tacString, loaded.stateRef, rs as any, dummyPos)
+  return { res, calls, rs }
+}
+
+test('custom tactic: a successful tactic is appended to the goal and can be ' +
+  'clicked like any other', async () => {
+    const { res, rs } = await makeCustomSession('constructor',
+      { tactics: [{ isGoal: false, id: 7, display: 'constructor' }] })
+    assert.equal(res.kind, 'added')
+    if (res.kind !== 'added') return
+    assert.deepEqual(res.node.children.map((c) => c.id), [1, 7])
+    assert.equal(res.tactics[0].custom, true)
+    assert.equal(res.stateRef.p, 'custom-state')
+
+    const after = await handleClick(
+      res.node, res.stateRef, res.tactics[0], rs as any, dummyPos)
+    assert.deepEqual(selectedIds(after.node), [7])
+    assert.equal(findById(after.node, 7)!.explored, true)
+  })
+
+test('custom tactic: a parse error adds nothing', async () => {
+  const { res } = await makeCustomSession('simpp',
+    { parseError: '<input>:1:0: unknown tactic' })
+  assert.deepEqual(res, { kind: 'parseError', message: '<input>:1:0: unknown tactic' })
+})
+
+test('custom tactic: placeholder instantiations share a fresh group id',
+  async () => {
+    const { res } = await makeCustomSession('cases HYP', {
+      tactics: [
+        { isGoal: false, id: 7, display: 'cases h1' },
+        { isGoal: false, id: 8, display: 'cases h2' }
+      ]
+    })
+    assert.equal(res.kind, 'added')
+    if (res.kind !== 'added') return
+    const ids = res.tactics.map((t) => t.groupId)
+    assert.equal(ids[0], ids[1])
+    assert.ok(ids[0] !== undefined)
+    assert.ok(!res.node.children.slice(0, -2).some((c) => c.groupId === ids[0]))
+  })

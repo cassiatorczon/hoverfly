@@ -15,6 +15,7 @@ type MutableNode = {
   originalId: ID | undefined, // the ID of the node this has been copied from, if applicable
   leanOrder?: number, // for goals: position in Lean's goal order under the parent tactic
   groupId?: number, // for tactics: which prototactic produced it
+  custom?: boolean, // for tactics: typed by the user rather than offered from the list
   completed: boolean, // a completed goal or tactic with all completed subgoals
   children: Node[], // applicable tactics for a goal, clusters for a tactic, goals for a cluster
   status: Status, // display information
@@ -137,6 +138,11 @@ export async function changeStatusAtId(root: Node, id: ID, newStatus: Status): P
   const update = async (n: Node) => n.id === id ? { ...n, status: newStatus } : n
   const pred = (n: Node) => n.id === id
   return updateNodes(root, update, pred);
+}
+
+export function appendChildren(root: Node, goalId: ID, nodes: Node[]): Node {
+  if (root.id === goalId) return { ...root, children: [...root.children, ...nodes] }
+  return { ...root, children: root.children.map((c) => appendChildren(c, goalId, nodes)) }
 }
 
 export function navChildren(n: Node): Node[] {

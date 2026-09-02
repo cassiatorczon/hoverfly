@@ -223,7 +223,18 @@
 
 .hf .rowA.group-row .caret {
   display: inline-block;
+  font-size: 14px;
   transition: transform .12s ease;
+}
+
+.hf .tactic-group>.kids.nested {
+  margin-left: 0;
+  padding-left: 0;
+  border-left: none;
+}
+
+.hf .tactic-group>.kids.nested .rowA .fold {
+  width: calc(.8em + 20px);
 }
 
 .hf .tactic-group[open]>summary .rowA.group-row .caret {
@@ -389,4 +400,47 @@
   border-radius: 5px;
   color: var(--goal);
   background: color-mix(in srgb, var(--goal) 10%, transparent);
+}
+
+.hf .rowA.custom-row {
+  cursor: default;
+}
+
+.hf .rowA.custom-row:hover {
+  background: none;
+}
+
+.hf .rowA.custom-row .marker .marker-badge {
+  cursor: pointer;
+}
+
+.hf .custom-input {
+  flex: 1 1 auto;
+  min-width: 8em;
+  font-family: var(--mono);
+  font-size: inherit;
+  padding: 0;
+  color: var(--vscode-editor-foreground);
+  background: transparent;
+  border: none;
+  outline: none;
+}
+
+.hf .custom-input::placeholder {
+  color: var(--vscode-descriptionForeground);
+}
+
+.hf .custom-feedback {
+  margin: 0 7px 3px calc(3.7em + 21px);
+  font-family: var(--mono);
+  font-size: 11px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--vscode-errorForeground, var(--vscode-editorError-foreground));
+}
+
+.hf .rowA .custom-tag {
+  flex: none;
+  font-size: 10px;
+  color: var(--vscode-descriptionForeground);
 }

@@ -1,6 +1,7 @@
 import type { RpcSessionAtPos, DocumentPosition } from '@leanprover/infoview';
 import {
   Node,
+  appendChildren,
   assert,
   cacheChild,
   changeStatusAtId,
@@ -128,6 +129,41 @@ export async function getSubgoals(
   const tsxClusters = clusters.map(APIClusterToNode)
 
   return { node: { ...n, children: tsxClusters }, stateRef: newStateRef }
+}
+
+export type CustomTacticResult =
+  | { kind: 'parseError', message: string }
+  | { kind: 'added', node: Node, tactics: Node[], stateRef: APIData }
+
+// Run a user-typed tactic on goal `n` and append the resulting tactic node(s)
+// to its children. Placeholder instantiations (`HYP`) form a collapsed group.
+export async function addCustomTactic(
+  root: Node,
+  n: Node,
+  tacString: string,
+  stateRef: APIData,
+  rs: RpcSessionAtPos,
+  pos: DocumentPosition): Promise<CustomTacticResult> {
+
+  assert(n.kind == 'goal', "Called addCustomTactic on tactic node " + n.id)
+
+  const params = { parentGoalId: n.id, tacString, stateRef, pos }
+  const [result, newStateRef]: [
+    { parseError?: string | null, tactics: APINode[] }, APIData
+  ] = await rs.call("Backend.addCustomTactic", params)
+  if (result.parseError) return { kind: 'parseError', message: result.parseError }
+
+  const groupId = result.tactics.length > 1
+    ? 1 + Math.max(-1, ...n.children.map((c) => c.groupId ?? -1))
+    : undefined
+  const tactics = result.tactics.map((a) =>
+    ({ ...APINodeToNode(a), groupId, custom: true }))
+  return {
+    kind: 'added',
+    node: appendChildren(root, n.id, tactics),
+    tactics,
+    stateRef: newStateRef
+  }
 }
 
 export async function handleClick(

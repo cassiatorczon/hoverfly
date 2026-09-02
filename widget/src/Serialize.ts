@@ -9,7 +9,7 @@ const INDENT = '  '
 
 // Collapse a pretty-printed tactic (which may wrap across several lines) into a single line so it
 // sits cleanly inside a `·` / `on_goal` block.
-function normalizeTactic(display: string): string {
+export function normalizeTactic(display: string): string {
   return display.replace(/\s+/g, ' ').trim()
 }
 
