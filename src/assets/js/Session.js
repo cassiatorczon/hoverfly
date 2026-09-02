@@ -1,0 +1,1 @@
+window;const e=new Map;function t(e,t){return`${e}#${t}`}function n(t){const n=e.get(t);return void 0===n?null:(e.delete(t),e.set(t,n),n)}function o(t,n){e.delete(t),e.set(t,n);for(const t of e.keys()){if(e.size<=4)break;e.delete(t)}}function i(t){e.delete(t)}export{i as clearSession,n as loadSession,o as saveSession,t as sessionKey};

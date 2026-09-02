@@ -20,6 +20,10 @@
 
 .hf .toolbar {
   padding: 2px 10px 8px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .hf .write-btn {

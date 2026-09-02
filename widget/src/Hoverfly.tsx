@@ -35,6 +35,7 @@ import {
   groupTactics
 } from './Tree'
 import { serializeTree } from './Serialize'
+import { sessionKey, loadSession, saveSession, clearSession } from './Session'
 import {
   APIData,
   APINode,
@@ -331,14 +332,16 @@ function renderNode(n: Node, ctx: RenderCtx, orphaned = false)
   )
 }
 
-function HoverflyTree({ root, onClick, onWrite, scriptHasSorry }: {
+function HoverflyTree({ root, onClick, onWrite, onReset, scriptHasSorry }: {
   root: Node,
   onClick: (n: Node) => Promise<void>,
   onWrite: (() => Promise<void>) | undefined,
+  onReset: () => void,
   scriptHasSorry: boolean
 },) {
   const [linkedId, setLinkedId] = useState<number | undefined>(undefined)
   const [confirming, setConfirming] = useState(false)
+  const [confirmingReset, setConfirmingReset] = useState(false)
 
   return (
     <div className="hf">
@@ -369,6 +372,17 @@ function HoverflyTree({ root, onClick, onWrite, scriptHasSorry }: {
               ? "Copy Incomplete Proof To File"
               : "Copy Proof to File"}
           </button>}
+        {confirmingReset
+          ? <span className="confirm">
+            This will discard everything you have explored here. Are you sure?
+            <button className="write-btn" onClick={onReset}>Yes</button>
+            <button className="write-btn incomplete" onClick={() => setConfirmingReset(false)}>Cancel</button>
+          </span>
+          : <button className="write-btn incomplete"
+            title="Discard this exploration and start again from the original goal"
+            onClick={() => setConfirmingReset(true)}>
+            Start Over
+          </button>}
       </div>
     </div>
   )
@@ -378,40 +392,53 @@ type HoverflyProps = PanelWidgetProps & {
   root: APINode;
   apiData: APIData;
   range: Range | null; // span of the literal `hoverfly` tactic
+  sessionId: number; // fresh per elaboration of the `hoverfly` tactic
+}
+
+function Hoverfly(props: HoverflyProps) {
+  const storeKey = sessionKey(props.pos.uri, props.sessionId)
+  return <HoverflySession key={storeKey} storeKey={storeKey} {...props} />
 }
 
 // TODO -- Docs for WithRpcRef say:
 // All RPC requests are relative to an open file and an RPC session for that
 // file.
 // The client must first connect to the session using $/lean/rpc/connect
-function Hoverfly(props: HoverflyProps) {
+function HoverflySession(props: HoverflyProps & { storeKey: string }) {
   const numAutoclicks = 10 // TODO: make this a prop with a default value
   const rs = useRpcSession()
   const ec = useContext(EditorContext)
 
-  // TODO this appears to be throwing an error
-  // initialize state from root goal
-  const loadedInit = useAsync(
-    () => getApplicableTactics(
-      selectRoot(APINodeToNode(props.root)), props.apiData, rs, props.pos),
-    [props.root, props.apiData, rs, props.pos])
+  const [saved, setSavedState] =
+    useState<NodeAndStateRef | null>(() => loadSession(props.storeKey))
+  const [generation, setGeneration] = useState(0) // bumped by "Start Over"
 
-  let loaded = loadedInit;
-  if (loadedInit.state === 'resolved') {
-    let sChildren = succeedingChildren(loadedInit.value.node)
-    if (sChildren.length == 1) {
-      // TODO
-      // loaded = await handleClick(loadedInit.value.node, loadedInit.value.stateRef,
-      //   sChildren[0], rs, props.pos)
-    }
+  const setSaved = (v: NodeAndStateRef) => {
+    setSavedState(v)
+    saveSession(props.storeKey, v)
   }
 
+  // TODO this appears to be throwing an error
+  const loaded = useAsync<NodeAndStateRef | null>(
+    async () => saved === null
+      ? await getApplicableTactics(
+        selectRoot(APINodeToNode(props.root)), props.apiData, rs, props.pos)
+      : null,
+    [generation])
 
-  // current tree state: a root node and a ref to backend state
-  const [saved, setSaved] = useState<NodeAndStateRef | null>(null)
+  // TODO: auto-descend when the root goal has exactly one applicable tactic
 
-  // Drop cached state on re-elaboration
-  useEffect(() => { setSaved(null) }, [props.apiData, props.pos, rs])
+  useEffect(() => {
+    if (loaded.state === 'resolved' && loaded.value !== null) {
+      saveSession(props.storeKey, loaded.value)
+    }
+  }, [loaded, props.storeKey])
+
+  const onReset = () => {
+    clearSession(props.storeKey)
+    setSavedState(null)
+    setGeneration((g: number) => g + 1)
+  }
 
   // if there is a saved state, use that
   // otherwise use initialized state if resolved
@@ -488,7 +515,7 @@ function Hoverfly(props: HoverflyProps) {
     }
 
     return <><HoverflyTree root={displayRoot} onClick={onClick}
-      onWrite={onWrite} scriptHasSorry={scriptHasSorry} /></>
+      onWrite={onWrite} onReset={onReset} scriptHasSorry={scriptHasSorry} /></>
   }
 }
 

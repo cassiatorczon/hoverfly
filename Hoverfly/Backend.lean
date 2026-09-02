@@ -285,6 +285,10 @@ def getSubgoalsForCustomTactic
               s!"{_params.parentGoalId}."
           }
         pure ([[errNode]], _params.stateRef) -- TODO is this the error behavior we want
+/-- Hands each elaboration of `hoverfly` a fresh ID that the widget can use to save trees. -/
+initialize hoverflySessionCounter : IO.Ref Nat ← do
+  IO.mkRef ((← IO.monoNanosNow) / 1000000)
+
 @[widget_module]
 def checkWidget : Widget.Module where
   javascript := include_str ".."/"src"/"assets"/"js"/"Hoverfly.js"
@@ -294,6 +298,8 @@ elab stx:"hoverfly" : tactic => do
   let lemmaApps ← (hoverflyLemmas (← getEnv)).mapM fun n =>
     `(tactic| apply $(mkIdent (`_root_ ++ n)):term)
   let tacs := (hoverflyTactics (← getEnv)).toList
+
+  let sessionId ← hoverflySessionCounter.modifyGet fun n => (n, n + 1)
 
   let rootProofState ← liftM (saveState : Lean.Elab.TermElabM _)
   let rootMVarId ← getMainGoal
@@ -325,7 +331,8 @@ elab stx:"hoverfly" : tactic => do
       let jsonRoot ← rpcEncode rootGoal
       let jsonApiData ← rpcEncode ref
       pure $ json% { root: $(jsonRoot) , apiData: $(jsonApiData),
-                     range: $(jsonRange) }) stx
+                     range: $(jsonRange),
+                     sessionId: $(toJson sessionId) }) stx
   let sorryTac ← `(tactic | sorry)
   evalTactic (TSyntax.raw sorryTac)
 
