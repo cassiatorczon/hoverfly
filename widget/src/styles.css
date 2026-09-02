@@ -349,3 +349,9 @@
   background: color-mix(in srgb, var(--goal) 14%, transparent);
   border-left-color: var(--goal);
 }
+.hf .no-tactics {
+  padding: 3px 7px;
+  font-size: 11px;
+  font-style: italic;
+  color: var(--vscode-errorForeground, var(--vscode-editorError-foreground));
+}

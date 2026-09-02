@@ -77,14 +77,18 @@ function HoverError({ message, children }: {
 }
 
 function renderChildren(n: Node, ctx: RenderCtx): React.ReactNode {
-  if (n.children.length === 0) return null
-
   if (n.kind !== 'goal') {
+    if (n.children.length === 0) return null
     return (
       <ul className="kids nested">
         {n.children.map((child: Node) => renderNode(child, ctx))}
       </ul>
     )
+  }
+
+  const expanded = n.explored || n.status !== 'unselected'
+  if (n.children.length === 0 && !(expanded && n.cache === undefined)) {
+    return null
   }
 
   const isFailingTactic = (c: Node) =>
@@ -103,8 +107,13 @@ function renderChildren(n: Node, ctx: RenderCtx): React.ReactNode {
   const failingChildren =
     n.children.filter((c: Node) => isFailingTactic(c) && c.visible)
 
+  const noneApply =
+    solvesGoalChildren.length === 0 && mainChildren.length === 0
+
   return (
     <ul className="kids nested">
+      {noneApply &&
+        <li><div className="no-tactics">No tactics apply successfully.</div></li>}
       {solvesGoalChildren.map((child: Node) => renderNode(child, ctx))}
       {renderTacticBucket(mainChildren, ctx)}
       {noopChildren.length > 0 &&
@@ -346,20 +355,20 @@ function HoverflyTree({ root, onClick, onWrite, scriptHasSorry }: {
       <div className="toolbar">
         {confirming
           ? <span className="confirm">
-              This will end your Hoverfly session. Are you sure you want to proceed?
-              <button className="write-btn" onClick={onWrite}>Yes</button>
-              <button className="write-btn incomplete" onClick={() => setConfirming(false)}>Cancel</button>
-            </span>
+            This will end your Hoverfly session. Are you sure you want to proceed?
+            <button className="write-btn" onClick={onWrite}>Yes</button>
+            <button className="write-btn incomplete" onClick={() => setConfirming(false)}>Cancel</button>
+          </span>
           : <button className={scriptHasSorry ? "write-btn incomplete" : "write-btn"}
-              disabled={!onWrite}
-              title={onWrite
-                ? "Replace `hoverfly` with the selected proof"
-                : "No source range available to write into"}
-              onClick={scriptHasSorry ? () => setConfirming(true) : onWrite}>
-              {scriptHasSorry
-                ? "Copy Incomplete Proof To File"
-                : "Copy Proof to File"}
-            </button>}
+            disabled={!onWrite}
+            title={onWrite
+              ? "Replace `hoverfly` with the selected proof"
+              : "No source range available to write into"}
+            onClick={scriptHasSorry ? () => setConfirming(true) : onWrite}>
+            {scriptHasSorry
+              ? "Copy Incomplete Proof To File"
+              : "Copy Proof to File"}
+          </button>}
       </div>
     </div>
   )
