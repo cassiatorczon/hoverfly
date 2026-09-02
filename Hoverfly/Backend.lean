@@ -36,124 +36,119 @@ def runTacticSafely (mvarId : MVarId) (stx : Syntax) : Lean.Elab.TermElabM (List
     fun e => do
       if e.isRuntime then throwError "{← e.toMessageData.toString}" else throw e
 
+def getSubgoalsAux (state : State.State) (tacId : StateId)
+  : Lean.Elab.TermElabM ((List (List APINode)) × WithRpcRef State.State) := do
+    -- get counter and maps
+    let {allTactics, nodeCounter, goalMap, tacticMap, clusterMap}
+      := state
+
+    -- get syntax and id of parent goal for tactic
+    match tacticMap.get? tacId with
+    | some (tacOutput, parentId) =>
+
+      -- check that the parent goal is known
+      match goalMap.get? parentId with
+      | some _ =>
+        -- restore proof state (including the name generator, see `restoreStateFull`) from the state after running the tactic
+        restoreStateFull tacOutput.postState
+
+        try
+          -- run tactic
+          let rawResult := tacOutput.goals
+          let result ← dropMVarGoals rawResult
+
+          -- copy entangled siblings
+          let copies ← carriedSiblings clusterMap goalMap parentId
+          let copyOf : Std.HashMap MVarId StateId :=
+            copies.foldl (fun m (smv, sid) => m.insert smv sid) ∅
+          let leanOrderMap : Std.HashMap MVarId Nat :=
+            (result ++ copies.map (·.1)).zipIdx.foldl
+              (fun m (mv, i) => m.insert mv i) ∅
+          let clusters ← getGoalClusters (result ++ copies.map (·.1))
+
+          -- entangled sibling handling may have touched the state, so save
+          -- the current one rather than reusing `tacOutput.postState`
+          let newProofState ←
+            liftM (saveState : Lean.Elab.TermElabM Lean.Elab.Term.SavedState)
+
+          -- add each new goal to map and return nodes and updated counter
+          let f t mvarId := match t with
+            | (nodes, tempGoalMap, c) => do
+              let goalPretty ← (ppGoal mvarId)
+              let apiNode : APINode :=
+                {isGoal := true, id := c, display := goalPretty.pretty,
+                  originalId := copyOf.get? mvarId,
+                  leanOrder := (leanOrderMap.get? mvarId).getD 0}
+              let goalInfo := (mvarId, newProofState)
+              let newMap := tempGoalMap.insert c goalInfo
+              return (apiNode :: nodes, newMap, c + 1)
+          let g (t : List (List APINode)
+                  × Std.HashMap StateId (MVarId × Elab.Term.SavedState)
+                  × Std.HashMap StateId ClusterInfo × StateId) mvarIds :=
+            match t with
+            | (gss, goalMap, clusterMap, count) => do
+              let (gs, newMap, newCount) ← mvarIds.foldlM f ([], goalMap, count)
+              let members := gs.map (·.id)
+              let shared ← sharedMVars mvarIds
+              let info : ClusterInfo := { members, sharedMVars := shared }
+              let newClusterMap := members.foldl (·.insert · info) clusterMap
+              let sharedNames ← shared.mapM fun m =>
+                return (← ppExpr (mkMVar m)).pretty
+              let gs := gs.map ({ · with sharedMVars := sharedNames })
+              return (gs :: gss, newMap, newClusterMap, newCount)
+          let (goalsRev, newGoalMap, newClusterMap, newCounter) ←
+            clusters.foldlM g ([], goalMap, clusterMap, nodeCounter)
+          let goals := goalsRev.reverse.map (·.reverse)
+
+          -- update state
+          let newState ← WithRpcRef.mk {
+              allTactics := allTactics,
+              nodeCounter := newCounter,
+              goalMap := newGoalMap,
+              tacticMap := tacticMap,
+              clusterMap := newClusterMap
+            }
+
+          pure (goals, newState)
+        catch e =>
+          -- Surface tactic failures as a node instead of letting them escape as an
+          -- uncaught JSON-RPC error (which shows up as "Uncaught (in promise)").
+          let errNode : APINode := {
+            isGoal := true, id := nodeCounter,
+            display := s!"tactic '{tacOutput.stx.prettyPrint.pretty}' failed:\n\
+              {← e.toMessageData.toString}"
+          }
+          pure ([[errNode]], ← WithRpcRef.mk state)
+      | _ =>
+        let errNode : APINode := {
+            isGoal := true, id := nodeCounter,
+            display := s!"Unable to find proof state for goal " ++
+              s!"'{parentId}'."
+          }
+        -- TODO: error behavior
+        pure ([[errNode]], ← WithRpcRef.mk state)
+    | _ =>
+      let errNode : APINode := {
+          isGoal := true, id := nodeCounter,
+          display := s!"Unable to find parent goal of tactic " ++
+              s!"{tacId}."
+        }
+      -- TODO: error behavior
+      pure ([[errNode]], ← WithRpcRef.mk state)
+
 @[server_rpc_method]
 def getSubgoals
   (_params : GetSubgoalsParams)
   : RequestM (RequestTask ((List (List APINode)) × WithRpcRef State.State)) :=
   RequestM.withWaitFindSnapAtPos _params.pos fun snap => do
     RequestM.runTermElabM snap do
-      -- get counter and maps
-      let {allTactics, nodeCounter, goalMap, tacticMap, clusterMap}
-        := _params.stateRef.val
-
-      -- get syntax and id of parent goal for tactic
-      match tacticMap.get? _params.id with
-      | some (tacOutput, parentId) =>
-
-        -- check that the parent goal is known
-        match goalMap.get? parentId with
-        | some _ =>
-
-          -- restore proof state (including the name generator, see `restoreStateFull`) from the state after running the tactic
-          liftM (restoreStateFull tacOutput.postState : Lean.Elab.TermElabM Unit)
-
-          try
-            -- run tactic
-            let rawResult := tacOutput.goals
-            let result ← dropMVarGoals rawResult
-
-            -- copy entangled siblings
-            let copies ← carriedSiblings clusterMap goalMap parentId
-            let copyOf : Std.HashMap MVarId StateId :=
-              copies.foldl (fun m (smv, sid) => m.insert smv sid) ∅
-            let leanOrderMap : Std.HashMap MVarId Nat :=
-              (result ++ copies.map (·.1)).zipIdx.foldl
-                (fun m (mv, i) => m.insert mv i) ∅
-            let clusters ← getGoalClusters (result ++ copies.map (·.1))
-
-            -- entangled sibling handling may have touched the state, so save
-            -- the current one rather than reusing `tacOutput.postState`
-            let newProofState ←
-              liftM (saveState : Lean.Elab.TermElabM Lean.Elab.Term.SavedState)
-
-            -- add each new goal to map and return nodes and updated counter
-            let f t mvarId := match t with
-              | (nodes, tempGoalMap, c) => do
-                let goalPretty ← (ppGoal mvarId)
-                let apiNode : APINode :=
-                  {isGoal := true, id := c, display := goalPretty.pretty,
-                   originalId := copyOf.get? mvarId,
-                   leanOrder := (leanOrderMap.get? mvarId).getD 0}
-                let goalInfo := (mvarId, newProofState)
-                let newMap := tempGoalMap.insert c goalInfo
-                return (apiNode :: nodes, newMap, c + 1)
-            let g (t : List (List APINode)
-                    × Std.HashMap StateId (MVarId × Elab.Term.SavedState)
-                    × Std.HashMap StateId ClusterInfo × StateId) mvarIds :=
-              match t with
-              | (gss, goalMap, clusterMap, count) => do
-                let (gs, newMap, newCount) ← mvarIds.foldlM f ([], goalMap, count)
-                let members := gs.map (·.id)
-                let shared ← sharedMVars mvarIds
-                let info : ClusterInfo := { members, sharedMVars := shared }
-                let newClusterMap := members.foldl (·.insert · info) clusterMap
-                let sharedNames ← shared.mapM fun m =>
-                  return (← ppExpr (mkMVar m)).pretty
-                let gs := gs.map ({ · with sharedMVars := sharedNames })
-                return (gs :: gss, newMap, newClusterMap, newCount)
-            let (goalsRev, newGoalMap, newClusterMap, newCounter) ←
-              clusters.foldlM g ([], goalMap, clusterMap, nodeCounter)
-            let goals := goalsRev.reverse.map (·.reverse)
-
-            -- update state
-            let newState ← WithRpcRef.mk {
-                allTactics := allTactics,
-                nodeCounter := newCounter,
-                goalMap := newGoalMap,
-                tacticMap := tacticMap,
-                clusterMap := newClusterMap
-              }
-
-            pure (goals, newState)
-          catch e =>
-            -- Surface tactic failures as a node instead of letting them escape as an
-            -- uncaught JSON-RPC error (which shows up as "Uncaught (in promise)").
-            let errNode : APINode := {
-              isGoal := true, id := nodeCounter,
-              display := s!"tactic '{tacOutput.stx.prettyPrint.pretty}' failed:\n\
-                {← e.toMessageData.toString}"
-            }
-            pure ([[errNode]], _params.stateRef)
-        | _ =>
-          let errNode : APINode := {
-              isGoal := true, id := nodeCounter,
-              display := s!"Unable to find proof state for goal " ++
-                s!"'{parentId}'."
-            }
-          -- TODO: error behavior
-          pure ([[errNode]], _params.stateRef)
-      | _ =>
-        let errNode : APINode := {
-            isGoal := true, id := nodeCounter,
-            display := s!"Unable to find parent goal of tactic " ++
-                s!"{_params.id}."
-          }
-        -- TODO: error behavior
-        pure ([[errNode]], _params.stateRef)
+      getSubgoalsAux _params.stateRef.val _params.id
 
 structure GetApplicableTacticsParams where
   id : StateId
   stateRef : WithRpcRef State.State
   pos : Lsp.Position
   deriving RpcEncodable
-
--- TODO
-def nameToString (n : Name) : String :=
-  n.toString
-  -- match n with
-  -- | .str _ s => s
-  -- | .num p i => p.toString
-  -- | _ => "?"
 
 def convertTacOutputsAndUpdateMap
   (results: List (List TacOutput))
@@ -187,6 +182,45 @@ def convertTacOutputsAndUpdateMap
 
   return (tacListList, tacMap, counter)
 
+def runProtoTacticsAtGoalAndState
+  (protoTactics : List ProtoTactic)
+  (state : State.State)
+  (goalId : StateId)
+  : Lean.Elab.TermElabM (List (List APINode) × WithRpcRef State.State) := do
+
+  -- get mvarId and proof state for goal
+  match state.goalMap.get? goalId with
+  | some (mvarId, proofState) =>
+    -- run tactics
+    let tacInput : TacInput := {goal:=mvarId, savedState:=proofState}
+    let results ←
+      protoTactics.mapM (fun t => runProtoTactic t proofState tacInput)
+
+    -- convert TacOutputs to APINodes and update tactic map
+    let (apiNodes, tacMap, counter) ←
+      convertTacOutputsAndUpdateMap
+        results
+        state.tacticMap
+        state.nodeCounter
+        goalId
+
+    -- update state
+    let newState ← WithRpcRef.mk {
+      allTactics := state.allTactics,
+      nodeCounter := counter
+      goalMap := state.goalMap
+      tacticMap := tacMap
+      clusterMap := state.clusterMap
+    }
+
+    pure (apiNodes, newState)
+  | _ =>
+    let errNode : APINode := {
+        isGoal := true, id := state.nodeCounter,
+        display := s!"Unable to find state for goal " ++
+            s!"{goalId}."
+      }
+    pure ([[errNode]], ← WithRpcRef.mk state) -- TODO is this the error behavior we want
 
 @[server_rpc_method]
 def getApplicableTactics
@@ -194,40 +228,63 @@ def getApplicableTactics
   : RequestM (RequestTask ((List (List APINode)) × WithRpcRef State.State)) :=
   RequestM.withWaitFindSnapAtPos _params.pos fun snap => do
     RequestM.runTermElabM snap do
-      -- get all tactics, counter, and maps
-      let {allTactics, nodeCounter, goalMap, tacticMap, clusterMap}
-        := _params.stateRef.val
+      runProtoTacticsAtGoalAndState
+        _params.stateRef.val.allTactics
+        _params.stateRef.val
+        _params.id
 
-      -- get mvarId and proof state for goal
-      match goalMap.get? _params.id with
+
+structure GetSubgoalsForCustomTacticParams where
+  parentGoalId : StateId
+  tacString : String
+  stateRef : WithRpcRef State.State
+  pos : Lsp.Position
+  deriving RpcEncodable
+
+@[server_rpc_method]
+def getSubgoalsForCustomTactic
+  (_params : GetSubgoalsForCustomTacticParams)
+  : RequestM (RequestTask ((List (List APINode)) × WithRpcRef State.State)) :=
+  RequestM.withWaitFindSnapAtPos _params.pos fun snap => do
+    RequestM.runTermElabM snap do
+      match _params.stateRef.val.goalMap.get? _params.parentGoalId with
       | some (mvarId, proofState) =>
-        -- run tactics
-        let tacInput : TacInput := {goal:=mvarId, savedState:=proofState}
-        let results ← allTactics.mapM (fun t => runProtoTactic t proofState tacInput)
+        restoreStateFull proofState
+        let env ← getEnv
+        let catName := `tactic
+        match Lean.Parser.runParserCategory env catName _params.tacString with
+        | .error e =>
+            let errNode : APINode := {
+              isGoal := true, id := _params.stateRef.val.nodeCounter,
+              display :=
+                s!"Unable to parse '{_params.tacString}' as tactic:\n {e}"
+            }
+            return ([[errNode]], _params.stateRef)
+        | .ok stx =>
+          -- convert to tactic
+          let t := syntaxToProtoTactic stx
+          let (outputs, newState) ← runProtoTacticsAtGoalAndState
+            [t]
+            _params.stateRef.val
+            _params.parentGoalId
 
-        -- convert TacOutputs to APINodes and update tactic map
-        let (apiNodes, tacMap, counter) ←
-          convertTacOutputsAndUpdateMap results tacticMap nodeCounter _params.id
-
-        -- update state
-        let newState ← WithRpcRef.mk {
-          allTactics := allTactics,
-          nodeCounter := counter
-          goalMap := goalMap
-          tacticMap := tacMap
-          clusterMap := clusterMap
-        }
-
-        pure (apiNodes, newState)
-      | _ =>
+          match outputs with
+          | [[t']] =>
+            getSubgoalsAux newState.val t'.id
+          | _ =>
+            let errNode : APINode := {
+              isGoal := true, id := _params.stateRef.val.nodeCounter,
+              display := s!"Unexpected number of output lists for tactic " ++
+                  _params.tacString
+              }
+            pure ([[errNode]], _params.stateRef) -- TODO is this the error behavior we want
+      | none =>
         let errNode : APINode := {
-            isGoal := true, id := nodeCounter,
-            display := s!"Unable to find state for goal " ++
-                s!"{_params.id}."
+          isGoal := true, id := _params.stateRef.val.nodeCounter,
+          display := s!"Unable to find state for goal " ++
+              s!"{_params.parentGoalId}."
           }
-        pure ([[errNode]], _params.stateRef) -- TODO: error behavior
-
-
+        pure ([[errNode]], _params.stateRef) -- TODO is this the error behavior we want
 @[widget_module]
 def checkWidget : Widget.Module where
   javascript := include_str ".."/"src"/"assets"/"js"/"Hoverfly.js"
