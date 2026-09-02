@@ -56,6 +56,13 @@
   opacity: .5;
 }
 
+.hf .confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--warn);
+}
+
 .hf .treeA {
   padding: 2px 10px 6px;
   position: relative;

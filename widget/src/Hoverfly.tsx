@@ -329,6 +329,7 @@ function HoverflyTree({ root, onClick, onWrite, scriptHasSorry }: {
   scriptHasSorry: boolean
 },) {
   const [linkedId, setLinkedId] = useState<number | undefined>(undefined)
+  const [confirming, setConfirming] = useState(false)
 
   return (
     <div className="hf">
@@ -343,16 +344,22 @@ function HoverflyTree({ root, onClick, onWrite, scriptHasSorry }: {
         </ul>
       </div>
       <div className="toolbar">
-        <button className={scriptHasSorry ? "write-btn incomplete" : "write-btn"}
-          disabled={!onWrite}
-          title={onWrite
-            ? "Replace `hoverfly` with the selected proof"
-            : "No source range available to write into"}
-          onClick={onWrite}>
-          {scriptHasSorry
-            ? "Finalize Incomplete Proof"
-            : "Finalize Proof"}
-        </button>
+        {confirming
+          ? <span className="confirm">
+              This will end your Hoverfly session. Are you sure you want to proceed?
+              <button className="write-btn" onClick={onWrite}>Yes</button>
+              <button className="write-btn incomplete" onClick={() => setConfirming(false)}>Cancel</button>
+            </span>
+          : <button className={scriptHasSorry ? "write-btn incomplete" : "write-btn"}
+              disabled={!onWrite}
+              title={onWrite
+                ? "Replace `hoverfly` with the selected proof"
+                : "No source range available to write into"}
+              onClick={scriptHasSorry ? () => setConfirming(true) : onWrite}>
+              {scriptHasSorry
+                ? "Copy Incomplete Proof To File"
+                : "Copy Proof to File"}
+            </button>}
       </div>
     </div>
   )
