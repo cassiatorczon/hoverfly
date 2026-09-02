@@ -37,16 +37,13 @@ initialize hoverflyTacticExt : SimplePersistentEnvExtension
 def hoverflyTactics (env : Environment) : Array ProtoTactic :=
   hoverflyTacticExt.getState env
 
-syntax tac_list := "[" tactic,+,? "]"
+syntax tac_list := "[" withoutPosition(sepByIndentSemicolon(tactic)) "]"
 
 namespace TacList
 
 def «elab» (stx : TSyntax `tac_list) : TermElabM (Array (TSyntax `tactic)) :=
   withRef stx do
-    match stx with
-    | `(tac_list | [$ts:tactic,*]) =>
-      return ts
-    | _ => throwUnsupportedSyntax
+    return stx.raw[1].getSepArgs.map (⟨·⟩)
 
 end TacList
 
