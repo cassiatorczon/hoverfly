@@ -1,39 +1,24 @@
-// source: https://github.com/chantakan/lean4-devcontainer-template
 {
-	"name": "Lean 4",
+	"name": "Hoverfly",
 	"build": {
 		"dockerfile": "Dockerfile"
 	},
-	"hostRequirements": {
-		"memory": "8gb",
-		"cpus": 2
-	},
-	"features": {
-		"ghcr.io/devcontainers/features/common-utils:2": {
-			"installZsh": false,
-			"installOhMyZsh": false,
-			"upgradePackages": false,
-			"username": "vscode",
-			"userUid": "automatic",
-			"userGid": "automatic"
-		}
-	},
+	"onCreateCommand": "lake exe cache get!",
 	"customizations": {
 		"vscode": {
 			"extensions": [
 				"leanprover.lean4"
 			],
 			"settings": {
-				"lean4.serverEnv": {
-					"PATH": "${containerEnv:PATH}"
-				},
-				"editor.unicodeHighlight.ambiguousCharacters": false
+				"chat.disableAIFeatures": true,
+				"chat.extensionUnification.enabled": false,
+				"C_Cpp.copilotHover": "disabled"
 			}
+		},
+		"codespaces": {
+			"openFiles": [
+				"../Hoverfly/Examples.lean"
+			]
 		}
-	},
-	"postCreateCommand": "bash .devcontainer/post-create.sh",
-	// Don't connect the editor until setup finishes; otherwise the Lean extension
-	// runs `lake setup-file` concurrently and corrupts .lake/packages.
-	"waitFor": "postCreateCommand",
-	"remoteUser": "vscode"
+	}
 }
