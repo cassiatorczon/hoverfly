@@ -32,5 +32,8 @@
 		}
 	},
 	"postCreateCommand": "bash .devcontainer/post-create.sh",
+	// Don't connect the editor until setup finishes; otherwise the Lean extension
+	// runs `lake setup-file` concurrently and corrupts .lake/packages.
+	"waitFor": "postCreateCommand",
 	"remoteUser": "vscode"
 }
