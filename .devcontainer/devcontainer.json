@@ -1,15 +1,17 @@
 {
 	"name": "Hoverfly",
 	"build": {
-		"dockerfile": "Dockerfile"
+		"dockerfile": "Dockerfile",
+		"context": ".."
 	},
-	"onCreateCommand": "lake exe cache get!",
+	"onCreateCommand": "lake update && lake exe cache get",
 	"customizations": {
 		"vscode": {
 			"extensions": [
 				"leanprover.lean4"
 			],
 			"settings": {
+				"lean4.automaticallyBuildDependencies": true,
 				"chat.disableAIFeatures": true,
 				"chat.extensionUnification.enabled": false,
 				"C_Cpp.copilotHover": "disabled"
@@ -17,7 +19,7 @@
 		},
 		"codespaces": {
 			"openFiles": [
-				"../Hoverfly/Examples.lean"
+				"Hoverfly/Examples.lean"
 			]
 		}
 	}
