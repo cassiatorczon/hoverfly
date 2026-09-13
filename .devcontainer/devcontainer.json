@@ -6,7 +6,10 @@
 		"dockerfile": "Dockerfile"
 	},
 	"features": {
-		"ghcr.io/devcontainers-extra/features/lean-asdf:2": {}
+		"ghcr.io/devcontainers-extra/features/lean-asdf:2": {},
+		"ghcr.io/devcontainers/features/common-utils:2": {
+			"version": "latest"
+		}
 	}
 	// Use 'forwardPorts' to make a list of ports inside the container available locally.
 	// "forwardPorts": [],
