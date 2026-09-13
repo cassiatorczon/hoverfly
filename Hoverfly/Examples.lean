@@ -20,18 +20,13 @@ add_hoverfly_tactics
     cases HYP
   ]
 
-@[aesop safe]
-theorem foo : True := by simp
+add_aesop_tactics_to_hoverfly
 
--- add_aesop_tactics_to_hoverfly
-
-theorem demo_rfl --(h : x = y) (h1 : x = 1) (h2 : y = 1)
+theorem demo_rfl
   : 1 = 1 := by
-  -- subst_eqs
-  -- repeat rewrite [Eq.comm]
   hoverfly
 
-theorem demo_le_trans (a b c : Nat) (hab : a ≤ b) (hbc : b ≤ c) : a ≤ c := by
+theorem demo_le_trans (a b c : Nat) (_ : a ≤ b) (_ : b ≤ c) : a ≤ c := by
   hoverfly
 
 theorem demo_add_assoc (n m p : Nat) :
