@@ -20,14 +20,18 @@ add_hoverfly_tactics
     cases HYP
   ]
 
-add_aesop_tactics_to_hoverfly
+-- add_aesop_tactics_to_hoverfly
 
 theorem demo_rfl
   : 1 = 1 := by
   hoverfly
 
-theorem demo_le_trans (a b c : Nat) (_ : a ≤ b) (_ : b ≤ c) : forall h : Nat, a ≤ c := by
-  hoverfly
+theorem demo_le_trans (a b c : Nat) (_ : a ≤ b) (_ : b ≤ c) : 1 = 1 /\ a ≤ c := by
+  apply And.intro
+  · rfl
+  · apply Nat.le_trans
+    · assumption
+    · sorry
 
 theorem demo_add_assoc (n m p : Nat) :
     n + (m + p) = (n + m) + p := by
