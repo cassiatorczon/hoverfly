@@ -271,6 +271,9 @@ def checkWidget : Widget.Module where
 
 open scoped Json in
 elab stx:"hoverfly" : tactic => do
+  let opts ← getOptions
+  let numAutoclicks := hoverfly.numAutoclicks.get opts
+
   let lemmaApps ← (hoverflyLemmas (← getEnv)).mapM fun n =>
     `(tactic| apply $(mkIdent (`_root_ ++ n)):term)
   let tacs := (hoverflyTactics (← getEnv)).toList
@@ -308,7 +311,8 @@ elab stx:"hoverfly" : tactic => do
       let jsonApiData ← rpcEncode ref
       pure $ json% { root: $(jsonRoot) , apiData: $(jsonApiData),
                      range: $(jsonRange),
-                     sessionId: $(toJson sessionId) }) stx
+                     sessionId: $(toJson sessionId),
+                     numAutoclicks: $(toJson numAutoclicks) }) stx
   let sorryTac ← `(tactic | sorry)
   evalTactic (TSyntax.raw sorryTac)
 

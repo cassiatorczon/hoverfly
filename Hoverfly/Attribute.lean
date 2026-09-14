@@ -9,6 +9,13 @@ public meta section
 
 open Lean Elab Command TacticUtil ProtoTactic State
 
+-- TODO: maybe this should go in a different file
+register_option hoverfly.numAutoclicks : Nat := {
+  defValue := 1
+  descr := "The number of steps Hoverfly will perform automatically without
+    user input (default is 1)."
+}
+
 -- todo: connect this
 initialize hoverflyLemmaExt : SimplePersistentEnvExtension Name (Array Name) ←
   registerSimplePersistentEnvExtension {

@@ -502,6 +502,7 @@ type HoverflyProps = PanelWidgetProps & {
   apiData: APIData;
   range: Range | null; // span of the literal `hoverfly` tactic
   sessionId: number; // fresh per elaboration of the `hoverfly` tactic
+  numAutoclicks: number; // the number of steps the tool can take automatically
 }
 
 function Hoverfly(props: HoverflyProps) {
@@ -514,7 +515,7 @@ function Hoverfly(props: HoverflyProps) {
 // file.
 // The client must first connect to the session using $/lean/rpc/connect
 function HoverflySession(props: HoverflyProps & { storeKey: string }) {
-  const numAutoclicks = 10 // TODO: make this a prop with a default value
+  const numAutoclicks = props.numAutoclicks
   const rs = useRpcSession()
   const ec = useContext(EditorContext)
 
