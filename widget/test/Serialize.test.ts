@@ -2,6 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
 import { serializeTree } from '../src/Serialize'
+import { recomputeCompleted, recomputeInactive } from '../src/Tree'
 import { goal, tactic, cluster } from './testUtils'
 
 const semi = { status: 'semiselected' as const }
@@ -332,4 +333,49 @@ test('linked cluster with a trailing independent goal keeps on_goal indices',
       '  b1\n' +
       'on_goal 1 =>\n' +
       '  d1')
+  })
+
+test('a linked cluster proved inside a cached goal resolves its copy, not sorry',
+  () => {
+    // `a ≤ c ∧ 1 = 1`: And.intro -> [A, B]. A was proved first via
+    // le_trans -> [g1 (a ≤ ?m), g2 (?m ≤ c)], where `assumption` on g1 assigns ?m
+    // and carries g2 as the copy g2'. Then switching to B cached all of A. The
+    // copy lives inside A's cache, so the serializer must find it there.
+    const g2Copy = goal(8, 'b ≤ c', {
+      ...semi, originalId: 6,
+      children: [tactic(9, 'assumption', { ...sel, explored: true })]
+    })
+    const g1 = goal(5, 'a ≤ ?m', {
+      ...semi, leanOrder: 0,
+      children: [tactic(7, 'assumption', {
+        ...semi, explored: true, children: [cluster(-8, [g2Copy])]
+      })]
+    })
+    const g2 = goal(6, '?m ≤ c', { leanOrder: 1 })
+    const aCache = goal(2, 'a ≤ c', {
+      ...semi, leanOrder: 0,
+      children: [tactic(4, 'apply Nat.le_trans', {
+        ...semi, explored: true, children: [cluster(-5, [g1, g2])]
+      })]
+    })
+    const A = goal(2, 'a ≤ c', { leanOrder: 0, explored: true, cache: aCache })
+    const B = goal(3, '1 = 1', {
+      ...semi, leanOrder: 1,
+      children: [tactic(10, 'rfl', { ...sel, explored: true })]
+    })
+    const tree = goal(0, 'a ≤ c ∧ 1 = 1', {
+      ...semi, children: [tactic(1, 'apply And.intro', {
+        ...semi, explored: true, children: [cluster(-2, [A]), cluster(-3, [B])]
+      })]
+    })
+
+    // mirror the widget: serialize the recomputed display tree
+    const display = recomputeCompleted(recomputeInactive(tree))
+    assert.equal(display.completed, true)
+    assert.equal(serializeTree(display),
+      'apply And.intro\n' +
+      '· apply Nat.le_trans\n' +
+      '  · assumption\n' +
+      '  · assumption\n' +
+      '· rfl')
   })

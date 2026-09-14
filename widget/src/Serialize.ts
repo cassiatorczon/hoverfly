@@ -66,8 +66,12 @@ function serializeGoal(goal: Node, copyMap: Map<number, Node>): string {
   if (active) return serializeTactic(active, copyMap)
 
   // If the goal is inactive but cached (i.e., a sibling of the current active goal that has been
-  // worked on), look it up in the cache and serialize it.
-  if (goal.cache) return serializeGoal(goal.cache, copyMap)
+  // worked on), look it up in the cache and serialize it. Copies inside the cache aren't reachable
+  // from the root's `children`, so add them to the map (mirroring `recomputeInactive`).
+  if (goal.cache) {
+    const cacheCopies = new Map([...copyMap, ...buildCopyMap(goal.cache)])
+    return serializeGoal(goal.cache, cacheCopies)
+  }
 
   // Otherwise, the goal hasn't been worked on and should be `sorry`d.
   return 'sorry'
