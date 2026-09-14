@@ -10,10 +10,11 @@ public meta section
 open Lean Elab Command TacticUtil ProtoTactic State
 
 -- TODO: maybe this should go in a different file
+-- todo: connect this
 register_option hoverfly.numAutoclicks : Nat := {
-  defValue := 1
+  defValue := 0
   descr := "The number of steps Hoverfly will perform automatically without
-    user input (default is 1)."
+    user input."
 }
 
 -- todo: connect this
