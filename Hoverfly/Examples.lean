@@ -26,7 +26,7 @@ theorem demo_rfl
   : 1 = 1 := by
   hoverfly
 
-theorem demo_le_trans (a b c : Nat) (_ : a ≤ b) (_ : b ≤ c) : a ≤ c := by
+theorem demo_le_trans (a b c : Nat) (_ : a ≤ b) (_ : b ≤ c) : forall h : Nat, a ≤ c := by
   hoverfly
 
 theorem demo_add_assoc (n m p : Nat) :
