@@ -4,7 +4,7 @@
 		"dockerfile": "Dockerfile",
 		"context": ".."
 	},
-	"onCreateCommand": "lake build",
+	"updateContentCommand": "lake build && lake build +Aesop",
 	"customizations": {
 		"vscode": {
 			"extensions": [
