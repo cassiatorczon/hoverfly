@@ -18,6 +18,7 @@ add_hoverfly_tactics
     rewrite [Nat.two_mul]
     induction HYP
     cases HYP
+    apply And.intro
   ]
 
 -- add_aesop_tactics_to_hoverfly
@@ -26,12 +27,8 @@ theorem demo_rfl
   : 1 = 1 := by
   hoverfly
 
-theorem demo_le_trans (a b c : Nat) (_ : a ≤ b) (_ : b ≤ c) : 1 = 1 /\ a ≤ c := by
-  apply And.intro
-  · rfl
-  · apply Nat.le_trans
-    · assumption
-    · sorry
+theorem demo_le_trans (a b c : Nat) (_ : a ≤ b) (_ : b ≤ c) : a ≤ c /\ 1 = 1 := by
+  hoverfly
 
 theorem demo_add_assoc (n m p : Nat) :
     n + (m + p) = (n + m) + p := by
