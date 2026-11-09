@@ -1,5 +1,4 @@
 import Hoverfly
-import Aesop
 
 add_hoverfly_tactics
   [

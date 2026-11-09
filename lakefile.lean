@@ -13,7 +13,8 @@ require ProofWidgets4 from git
 require "leanprover-community" / "batteries" @ git "v4.32.0"
 
 /-
-The following config is inspired by https://github.com/leanprover-community/ProofWidgets4/blob/main/lakefile.lean.
+The following config is inspired by
+https://github.com/leanprover-community/ProofWidgets4/blob/main/lakefile.lean.
 -/
 
 input_dir widgetSrcs where
